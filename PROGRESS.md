@@ -116,5 +116,23 @@
 **Status:** ⏳ In Progress
 - Bypassed Data Gate.
 - Writing raw-frame baseline components (`models.py`, `transforms.py`, `train.py`).
+- Implemented the first raw-frame baseline path after human approval of the pivot:
+  - `src/dataset.py`: real metadata validation, cache builder, stable cached dataset access by metadata order.
+  - `src/transforms.py`: raw-frame normalization plus photometric-only training jitter; no flips or rotations.
+  - `src/models.py`: `timm` model factory with a `SmallCNN` debug fallback.
+  - `src/losses.py`: class-weighted cross entropy helper.
+  - `src/train.py`: real fold-based training loop, fold-hash check, checkpoints, OOF probabilities, plateau threshold, and `run_manifest.json`.
+  - `configs/exp/raw_convnext_baseline.yaml`: M2 ConvNeXt-T raw baseline config with `canonicalize: false` and no azimuth conditioning.
+  - `src/infer.py` and `src/submit.py`: first run-based prediction averaging and strict CSV validator/builder.
+  - Added focused tests for dataset cache order, raw preprocessing, and submission validation.
+- Verification performed in this Codex environment:
+  - `compileall src tests` passed.
+  - Forbidden geometry scan found no raw library flips, rotations, or `timm.data.create_transform` usage.
+  - Lightweight CSV validator smoke passed.
+- Verification blocked:
+  - `make` is not available in this shell.
+  - `python` / `py` are not on PATH.
+  - `.venv\Scripts\python.exe` points to a missing Python 3.11 install.
+  - Bundled Codex Python lacks `torch`, `pytest`, and `sklearn`, so full cache/training/tests must be run in the local Python 3.11 ML environment.
 
 ---
