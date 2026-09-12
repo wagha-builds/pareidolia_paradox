@@ -34,7 +34,7 @@
 | ID | Milestone | Target | Status | Gate passed? |
 |---|---|---|---|---|
 | M0 | Foundation & Governance | Sep 12 | ✅ Done | Yes |
-| M1 | Data Gate | Sep 13 | Not started | — |
+| M1 | Data Gate | Sep 13 | ❌ Blocked | No |
 | M2 | First Accepted Submission | Sep 14 | Not started | — |
 | M3 | Canonical Reference Model | Sep 15-16 | Not started | — |
 | M4 | Portfolio & Robustness | Sep 17 | Not started | — |
@@ -94,5 +94,18 @@
 - `train.py` dummy script added.
 - Git repository initialized and initial commit made.
 - Virtual environment setup initiated in the background.
+
+---
+
+### M1 — Data Gate
+**Date:** 12 Sep 2026
+**Status:** ❌ Blocked (Gate Failed)
+- Created `tests/fixtures/synthetic.py` (Lambertian rendering for unit tests).
+- Created `src/canonical.py` (calibration, canonicalize, decanonicalize) and `tests/test_canonical.py`.
+- Created `src/metrics.py` (thresholding, paired bootstrap) and `tests/test_metrics.py`.
+- Created `src/dataset.py` with caching stubs.
+- Created fully functional `scripts/eda.py` to perform the EDA tasks (calibration, mean images, and generating `folds.csv` + updating `config.yaml`).
+- **Gate Failure:** The user ran `scripts/eda.py`. Calibration returned `R = 0.1758` (which is < 0.4) and `R_other = 0.1696` (nearly identical). The canonical mean images are identical grey blurs without the required top/bottom shading separation.
+- *Action Required:* Stop and escalate. We need to debug the azimuth angle convention or check if the dataset has scrambled metadata.
 
 ---

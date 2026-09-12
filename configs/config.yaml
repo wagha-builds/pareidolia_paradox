@@ -1,34 +1,26 @@
-# Base Configuration
-# The frozen block contains values computed during Phase 1 that must never change
-
 frozen:
   calibration:
-    delta: null
-    s: null
-    R: null
-  prior_pi1: null
+    delta: 46.702900923368404
+    s: -1
+    R: 0.17577255171419667
+  prior_pi1: 0.6366182836771072
   norm:
-    mean: null
-    std: null
-  folds_sha256: null
+    mean: 0.3835757076740265
+    std: 0.2496677041053772
+  folds_sha256: 90291cbb8d41c4f899261e22bd30001ee76d0fc564c2ebe20270259c145e955e
   threshold: null
-
-# Experiment defaults (overridden by exp/*.yaml)
 experiment:
-  name: "baseline"
+  name: baseline
   seed: 42
-  
 data:
   image_size: 256
   canonicalize: true
-  corner_mode: "affine_zoom" # PRD AD-8: sqrt2-zoom warp
-  
+  corner_mode: affine_zoom
 model:
-  backbone: "convnext_tiny"
+  backbone: convnext_tiny
   in_chans: 1
   pretrained: true
-  conditioning: "none"
-  
+  conditioning: none
 training:
   epochs: 30
   batch_size: 32
@@ -36,5 +28,5 @@ training:
   weight_decay: 0.05
   label_smoothing: 0.1
   drop_path_rate: 0.1
-  mixed_precision: "bf16"
+  mixed_precision: bf16
   early_stopping_patience: 5
