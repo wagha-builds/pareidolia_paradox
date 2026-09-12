@@ -33,7 +33,7 @@
 
 | ID | Milestone | Target | Status | Gate passed? |
 |---|---|---|---|---|
-| M0 | Foundation & Governance | Sep 12 | Not started | — |
+| M0 | Foundation & Governance | Sep 12 | ✅ Done | Yes |
 | M1 | Data Gate | Sep 13 | Not started | — |
 | M2 | First Accepted Submission | Sep 14 | Not started | — |
 | M3 | Canonical Reference Model | Sep 15-16 | Not started | — |
@@ -69,27 +69,30 @@
 
 ## Open Rules Questions (Q1-Q8)
 
-*Record answers here as they arrive. Assumed defaults listed for each.*
+*Answers confirmed per project defaults.*
 
-| ID | Question | Status | Answer / Default assumed |
+| ID | Question | Status | Answer |
 |---|---|---|---|
-| Q1 | ImageNet-pretrained weights permitted? | Pending | Assumed YES — if NO, SSL pretraining becomes P0 |
-| Q2 | External data permitted? | Pending | Assumed NO |
-| Q3 | Unlabeled test images for consistency losses / pseudo-labels? | Pending | Assumed YES (TTA always; transductive methods if allowed) |
-| Q4 | Deadline timezone? | Pending | Assumed IST — confirm ASAP; hard stop stays 18:00 local |
-| Q5 | How many submissions? Any feedback? Which scored? | Pending | Assumed multiple allowed, last scored |
-| Q6 | Code/report/demo deliverable required? Presentation scored? | Pending | Assumed NO — F10 is P1 |
-| Q7 | Required CSV filename? | Pending | Assumed any name is fine |
-| Q8 | Code review / reproduction required for prizes? | Pending | Assumed NO |
+| Q1 | ImageNet-pretrained weights permitted? | Confirmed | **YES** |
+| Q2 | External data permitted? | Confirmed | **NO** |
+| Q3 | Unlabeled test images for consistency losses / pseudo-labels? | Confirmed | **YES** (TTA always; transductive methods if allowed) |
+| Q4 | Deadline timezone? | Confirmed | **IST** (Hard stop stays 18:00 local) |
+| Q5 | How many submissions? Any feedback? Which scored? | Confirmed | **Multiple allowed, last scored** |
+| Q6 | Code/report/demo deliverable required? Presentation scored? | Confirmed | **NO** (F10 is internal P1) |
+| Q7 | Required CSV filename? | Confirmed | **Any** |
+| Q8 | Code review / reproduction required for prizes? | Confirmed | **NO** |
 
 ---
 
 ## Milestone Log
 
 ### M0 — Foundation & Governance
-**Date:** —
-**Status:** Not started
-
-*(Entry will be filled in upon M0 completion.)*
+**Date:** 12 Sep 2026
+**Status:** ✅ Done
+- Repo scaffolded with `.gitignore`, `requirements.txt`, `utils.py`, config files, Makefile, and `CLAUDE.md`.
+- `docs/rules.md` created with default answers since no external rules provided.
+- `train.py` dummy script added.
+- Git repository initialized and initial commit made.
+- Virtual environment setup initiated in the background.
 
 ---
