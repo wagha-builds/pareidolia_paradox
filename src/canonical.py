@@ -11,9 +11,15 @@ def az_to_img(az, delta, s):
 def img_to_az(theta, delta, s):  
     return (s * (theta - delta)) % 360.0
 
-def dark_minus_bright_deg(img, frac=0.10):
+def dark_minus_bright_deg(img, frac=0.10, center_crop=None):
     """Angle of centroid(darkest frac) - centroid(brightest frac)."""
     x = img.astype(np.float32)
+    if center_crop is not None:
+        h, w = x.shape
+        r0 = (h - center_crop) // 2
+        c0 = (w - center_crop) // 2
+        x = x[r0:r0+center_crop, c0:c0+center_crop]
+    
     lo, hi = np.quantile(x, [frac, 1 - frac])
     r, c = np.indices(x.shape)
     dark, bright = x <= lo, x >= hi
@@ -26,8 +32,8 @@ def circ_mean_R(deg):
     C, S = np.cos(a).mean(), np.sin(a).mean()
     return np.degrees(np.arctan2(S, C)) % 360.0, float(np.hypot(C, S))
 
-def calibrate(images, az, labels):
-    phi = np.array([dark_minus_bright_deg(im) for im in images])
+def calibrate(images, az, labels, center_crop=None):
+    phi = np.array([dark_minus_bright_deg(im, center_crop=center_crop) for im in images])
     toward = (phi + np.where(labels == 1, 180.0, 0.0)) % 360.0
     fits = {s: circ_mean_R(toward - s * az) for s in (+1, -1)}
     s = max(fits, key=lambda k: fits[k][1])

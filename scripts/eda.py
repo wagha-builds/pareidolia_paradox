@@ -53,11 +53,18 @@ def main():
     print(f"Norm stats: mean={mean_val:.4f}, std={std_val:.4f}")
 
     # 1.5 Calibration
-    print("Running calibration...")
-    # We pass the full array
-    calib = calibrate(images, azs, labels)
-    delta, s, R = float(calib["delta"]), int(calib["s"]), float(calib["R"])
-    print(f"Calibration output: delta={delta:.2f}, s={s}, R={R:.4f} (other R={calib['R_other_s']:.4f})")
+    print("Running calibration (sweeping center_crop sizes to isolate features)...")
+    best_calib = None
+    best_crop = None
+    for crop in [None, 128, 96, 64, 48, 32]:
+        calib = calibrate(images, azs, labels, center_crop=crop)
+        print(f"Crop {crop if crop else 'Full'}: R={calib['R']:.4f}")
+        if best_calib is None or calib['R'] > best_calib['R']:
+            best_calib = calib
+            best_crop = crop
+            
+    delta, s, R = float(best_calib["delta"]), int(best_calib["s"]), float(best_calib["R"])
+    print(f"Best Calibration output (Crop {best_crop}): delta={delta:.2f}, s={s}, R={R:.4f} (other R={best_calib['R_other_s']:.4f})")
     
     # 1.6 Canonical mean images
     print("Generating canonical mean images...")
