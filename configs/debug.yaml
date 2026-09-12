@@ -1,0 +1,28 @@
+# Debug Configuration for Smoke Tests
+# Tiny config: 1 fold, 5 epochs, 32 batch, no CV
+
+experiment:
+  name: "debug"
+  seed: 42
+
+data:
+  image_size: 256
+  canonicalize: false
+  corner_mode: "affine_zoom"
+  
+model:
+  backbone: "resnet18" # Fast initialization for debugging
+  in_chans: 1
+  pretrained: false # Don't download weights during debug
+  conditioning: "none"
+  
+training:
+  epochs: 5
+  batch_size: 32
+  learning_rate: 1e-3
+  weight_decay: 0.05
+  label_smoothing: 0.0
+  drop_path_rate: 0.0
+  mixed_precision: "fp16"
+  early_stopping_patience: 2
+  debug_mode: true # Flag for the training loop to run on a tiny subset

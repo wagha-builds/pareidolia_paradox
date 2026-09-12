@@ -1,0 +1,95 @@
+# PROGRESS.md — Pareidolia Paradox
+
+**Shared memory across sessions. Read this at the start of every milestone before doing anything else.**
+
+---
+
+## Project Snapshot
+
+| Item | Value |
+|---|---|
+| Competition | Pareidolia Paradox — lunar Depth (0) vs. Rise (1) classification |
+| Metric | Balanced Accuracy on 2,000 hidden-label images |
+| Work started | Sat 12 Sep 2026 |
+| Internal hard stop | Mon 21 Sep 2026, 18:00 local |
+| Final submission target | Sat 19 Sep 2026 (latest: Sun 20 Sep, 12:00) |
+| Days remaining (from Sep 12) | 9 calendar days |
+| Competition deadline | Mon 21 Sep 2026, 23:59 **(timezone TBC — Q4)** |
+
+---
+
+## Resolved Conflicts (from initial planning session, Sep 12)
+
+| # | Conflict | Resolution |
+|---|---|---|
+| C1 | Calendar baseline | Work starts **Sep 12, 2026** (not Sep 6 or Sep 10). All milestone dates recalibrated from Sep 12. |
+| C2 | Canonicalization corner-handling | **PRD/SKILL wins**: use single `cv2.getRotationMatrix2D(..., SQRT2)` affine warp. Reflect padding is forbidden. |
+| C3 | FiLM conditioning after canonicalization | **PRD/SKILL wins**: no azimuth conditioning for canonical models by default. FiLM reserved for the raw-frame member (E7). |
+| C4 | Photometric negation constant | **PRD/SKILL wins**: always use `255 - img` on uint8. Never `img.max() - img`. |
+
+---
+
+## Milestone Status
+
+| ID | Milestone | Target | Status | Gate passed? |
+|---|---|---|---|---|
+| M0 | Foundation & Governance | Sep 12 | Not started | — |
+| M1 | Data Gate | Sep 13 | Not started | — |
+| M2 | First Accepted Submission | Sep 14 | Not started | — |
+| M3 | Canonical Reference Model | Sep 15-16 | Not started | — |
+| M4 | Portfolio & Robustness | Sep 17 | Not started | — |
+| M5 | Ensemble & Threshold Freeze | Sep 18 | Not started | — |
+| M6 | Final Submission | Sep 19 | Not started | — |
+| M7 | App: Core Prediction & Explainability | Sep 15-18 (parallel) | Not started | — |
+| M8 | App: Sun Simulator | Sep 18-19 | Not started | — |
+| M9 | Reproducibility, Docs & Hard Stop | Sep 19-21 | Not started | — |
+
+---
+
+## Key Numbers (fill in as they are produced)
+
+| Metric | Value | Run/Source |
+|---|---|---|
+| pi1 (class 1 prior) | TBD | M1 |
+| Calibration R | TBD | M1 |
+| Calibration (delta, s) | TBD | M1 |
+| Adversarial validation AUC | TBD | M1 |
+| B0 (constant predictor BA) | TBD | M2 |
+| B1 (shortcut baseline BA) | TBD | M2 |
+| B2 (LightGBM physical features BA) | TBD | M2 |
+| B3 (naive CNN BA) | TBD | M2 |
+| E1 OOF BA (canonical reference) | TBD | M3 |
+| E2 OOF BA (no canonicalization) | TBD | M3 |
+| Final ensemble OOF BA | TBD | M5 |
+| Frozen threshold t* | TBD | M5 |
+| Shortcut-wrong BA (K2) | TBD | M4 |
+| Inversion-stress BA (K3) | TBD | M4 |
+
+---
+
+## Open Rules Questions (Q1-Q8)
+
+*Record answers here as they arrive. Assumed defaults listed for each.*
+
+| ID | Question | Status | Answer / Default assumed |
+|---|---|---|---|
+| Q1 | ImageNet-pretrained weights permitted? | Pending | Assumed YES — if NO, SSL pretraining becomes P0 |
+| Q2 | External data permitted? | Pending | Assumed NO |
+| Q3 | Unlabeled test images for consistency losses / pseudo-labels? | Pending | Assumed YES (TTA always; transductive methods if allowed) |
+| Q4 | Deadline timezone? | Pending | Assumed IST — confirm ASAP; hard stop stays 18:00 local |
+| Q5 | How many submissions? Any feedback? Which scored? | Pending | Assumed multiple allowed, last scored |
+| Q6 | Code/report/demo deliverable required? Presentation scored? | Pending | Assumed NO — F10 is P1 |
+| Q7 | Required CSV filename? | Pending | Assumed any name is fine |
+| Q8 | Code review / reproduction required for prizes? | Pending | Assumed NO |
+
+---
+
+## Milestone Log
+
+### M0 — Foundation & Governance
+**Date:** —
+**Status:** Not started
+
+*(Entry will be filled in upon M0 completion.)*
+
+---
