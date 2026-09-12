@@ -1,0 +1,26 @@
+# Baseline B3: Naive CNN on raw tiles (ResNet-18)
+experiment:
+  name: "b3_raw_resnet18"
+  seed: 42
+
+data:
+  image_size: 256
+  canonicalize: false
+  corner_mode: "affine_zoom"
+
+model:
+  backbone: "resnet18"
+  in_chans: 1
+  pretrained: true
+  conditioning: "none"
+
+training:
+  epochs: 10
+  batch_size: 32
+  learning_rate: 3e-4
+  weight_decay: 0.01
+  label_smoothing: 0.05
+  drop_path_rate: 0.0
+  mixed_precision: "bf16"
+  early_stopping_patience: 4
+  debug_mode: false

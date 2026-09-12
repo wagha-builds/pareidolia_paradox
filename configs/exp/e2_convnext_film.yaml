@@ -1,0 +1,31 @@
+# Experiment E2: ConvNeXt-Tiny with FiLM Azimuth Conditioning
+# Parent: e1_raw_film_resnet18
+# Change: Modern hierarchical ConvNeXt-Tiny backbone with 7x7 depthwise convolutions and FiLM conditioning
+
+experiment:
+  name: "e2_convnext_film"
+  seed: 42
+
+data:
+  image_size: 256
+  canonicalize: false
+  corner_mode: "affine_zoom"
+
+model:
+  backbone: "convnext_tiny"
+  in_chans: 1
+  pretrained: true
+  conditioning: "film"
+  az_dim: 128
+  drop_rate: 0.2
+  drop_path_rate: 0.1
+
+training:
+  epochs: 12
+  batch_size: 32
+  learning_rate: 2e-4
+  weight_decay: 0.05
+  label_smoothing: 0.05
+  mixed_precision: "bf16"
+  early_stopping_patience: 4
+  debug_mode: false

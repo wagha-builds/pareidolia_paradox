@@ -1,0 +1,12 @@
+# Ensemble Specification: Canonical Zero-Azimuth ConvNeXt (5-Fold) + ResNet-18 FiLM (5-Fold)
+# Combines two diverse paradigms:
+# 1. Canonical zero-azimuth ConvNeXt-Tiny (immune to azimuth leakage)
+# 2. ResNet-18 with continuous FiLM azimuth conditioning
+
+ensemble:
+  name: "ens_canonical_and_film_5fold"
+  method: "prob_mean"
+  runs:
+    - "experiments/20260913-015033_convnext_tiny_e4_canonical_convnext_s42"
+    - "experiments/20260913-004400_resnet18_e1_raw_film_resnet18_s42"
+  weights: [0.60, 0.40]  # 60% Canonical ConvNeXt, 40% ResNet-18

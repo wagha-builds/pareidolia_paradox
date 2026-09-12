@@ -1,0 +1,33 @@
+# Experiment E5: Raw-Frame ConvNeXt-Tiny with Balanced Counterfactual Training
+# Feature: Raw tiles with FiLM conditioning, but with 50% rot180 label-flip counterfactuals.
+# Defense: Enforces equal 50/50 prior of Rise/Depth at every azimuth angle, destroying the azimuth shortcut.
+
+experiment:
+  name: "e5_raw_balanced_counterfactual_convnext"
+  seed: 42
+
+data:
+  image_size: 256
+  canonicalize: false
+  corner_mode: "affine_zoom"
+
+model:
+  backbone: "convnext_tiny"
+  in_chans: 1
+  pretrained: true
+  conditioning: "film"
+  az_dim: 128
+  drop_rate: 0.2
+  drop_path_rate: 0.1
+
+training:
+  epochs: 12
+  batch_size: 32
+  learning_rate: 2e-4
+  weight_decay: 0.05
+  label_smoothing: 0.05
+  mixed_precision: "bf16"
+  early_stopping_patience: 4
+  p_rot180_flip: 0.50
+  p_neg: 0.20
+  debug_mode: false

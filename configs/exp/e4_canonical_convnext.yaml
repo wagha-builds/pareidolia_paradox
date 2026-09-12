@@ -1,0 +1,33 @@
+# Experiment E4: Canonical ConvNeXt-Tiny with Zero-Azimuth Input (Approach A + B)
+# Feature: Images canonicalized to top-lit (sun at 90°). ZERO azimuth fed to network.
+# Augmentation: Vertical flip label-swap (p=0.25), photometric negation label-swap (p=0.15).
+# Defense: Physically impossible for network to cheat on azimuth metadata.
+
+experiment:
+  name: "e4_canonical_convnext"
+  seed: 42
+
+data:
+  image_size: 256
+  canonicalize: true
+  corner_mode: "affine_zoom"
+
+model:
+  backbone: "convnext_tiny"
+  in_chans: 1
+  pretrained: true
+  conditioning: "none"
+  drop_rate: 0.2
+  drop_path_rate: 0.1
+
+training:
+  epochs: 10
+  batch_size: 64
+  learning_rate: 3e-4
+  weight_decay: 0.05
+  label_smoothing: 0.05
+  mixed_precision: "bf16"
+  early_stopping_patience: 4
+  p_vflip: 0.25
+  p_neg: 0.15
+  debug_mode: false

@@ -1,7 +1,5 @@
-data/raw/*
-!data/raw/.gitkeep
-data/processed/*
-!data/processed/.gitkeep
+data/raw/
+data/processed/
 experiments/
 artifacts/*
 !artifacts/registry.json

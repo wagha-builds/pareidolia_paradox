@@ -1,0 +1,33 @@
+# Experiment E3: Raw ResNet-18 with FiLM and Relief-Inversion Label-Flip Augmentations
+# Parent: e1_raw_film_resnet18 (OOF BA: 0.6185, shortcut-wrong BA: 0.2215)
+# Change: Introduce counterfactual relief inversions (rot180 label swap p=0.25, negation label swap p=0.15)
+# Goal: Force network to learn 3D shadow morphology instead of shortcutting to solar azimuth
+
+experiment:
+  name: "e3_raw_labelflip_resnet18"
+  seed: 42
+
+data:
+  image_size: 256
+  canonicalize: false
+  corner_mode: "affine_zoom"
+
+model:
+  backbone: "resnet18"
+  in_chans: 1
+  pretrained: true
+  conditioning: "film"
+  az_dim: 64
+
+training:
+  epochs: 10
+  batch_size: 32
+  learning_rate: 3e-4
+  weight_decay: 0.01
+  label_smoothing: 0.05
+  drop_path_rate: 0.0
+  mixed_precision: "bf16"
+  early_stopping_patience: 4
+  p_rot180_flip: 0.25
+  p_neg: 0.15
+  debug_mode: false

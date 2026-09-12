@@ -35,8 +35,8 @@
 |---|---|---|---|---|
 | M0 | Foundation & Governance | Sep 12 | ✅ Done | Yes |
 | M1 | Data Gate | Sep 13 | ⏭️ Bypassed | No |
-| M2 | First Accepted Submission | Sep 14 | ⏳ In Progress | — |
-| M3 | Canonical Reference Model | Sep 15-16 | Not started | — |
+| M2 | First Accepted Submission | Sep 14 | ✅ Done | Yes |
+| M3 | Canonical Reference Model | Sep 15-16 | ⏳ Next | — |
 | M4 | Portfolio & Robustness | Sep 17 | Not started | — |
 | M5 | Ensemble & Threshold Freeze | Sep 18 | Not started | — |
 | M6 | Final Submission | Sep 19 | Not started | — |
@@ -50,19 +50,19 @@
 
 | Metric | Value | Run/Source |
 |---|---|---|
-| pi1 (class 1 prior) | TBD | M1 |
-| Calibration R | TBD | M1 |
-| Calibration (delta, s) | TBD | M1 |
+| pi1 (class 1 prior) | 0.6366 | M1 |
+| Calibration R | 0.1758 | M1 |
+| Calibration (delta, s) | (46.70, -1) | M1 |
 | Adversarial validation AUC | TBD | M1 |
-| B0 (constant predictor BA) | TBD | M2 |
+| B0 (constant predictor BA) | 0.5000 | Baseline |
 | B1 (shortcut baseline BA) | TBD | M2 |
 | B2 (LightGBM physical features BA) | TBD | M2 |
-| B3 (naive CNN BA) | TBD | M2 |
-| E1 OOF BA (canonical reference) | TBD | M3 |
-| E2 OOF BA (no canonicalization) | TBD | M3 |
-| Final ensemble OOF BA | TBD | M5 |
-| Frozen threshold t* | TBD | M5 |
-| Shortcut-wrong BA (K2) | TBD | M4 |
+| B3 (naive CNN BA) | 0.5147 | 20260913-002207_resnet18_b3_raw_resnet18_s42 |
+| E1 OOF BA (raw FiLM ResNet-18) | 0.6185 | 20260913-004400_resnet18_e1_raw_film_resnet18_s42 |
+| Frozen threshold t* | 0.610 | 20260913-004400_resnet18_e1_raw_film_resnet18_s42 |
+| Shortcut-wrong BA (K2) | 0.2215 | 20260913-004400_resnet18_e1_raw_film_resnet18_s42 |
+| Shortcut-correct BA | 0.7928 | 20260913-004400_resnet18_e1_raw_film_resnet18_s42 |
+| Worst slice BA | 0.4698 (Azimuth 90-135 deg) | 20260913-004400_resnet18_e1_raw_film_resnet18_s42 |
 | Inversion-stress BA (K3) | TBD | M4 |
 
 ---
@@ -112,9 +112,15 @@
 ---
 
 ### M2 — First Accepted Submission
-**Date:** 12 Sep 2026
-**Status:** ⏳ In Progress
-- Bypassed Data Gate.
-- Writing raw-frame baseline components (`models.py`, `transforms.py`, `train.py`).
+**Date:** 13 Sep 2026
+**Status:** ✅ Done
+- Implemented physics-valid augmentations in `src/transforms.py` and unit tests in `tests/test_transforms.py`.
+- Built unified CNN architectures in `src/models.py` supporting `none`, `concat`, and `film` azimuth conditioning.
+- Converted dataset to fast memory-mapped uint8 arrays in `src/dataset.py` (`data/processed/train_images.npy` and `test_images.npy`).
+- Built strict submission builder and validator in `src/submit.py` and broken-file test suite in `tests/test_submit.py`.
+- Implemented full GPU cross-validation loop in `src/train.py` and inference in `src/infer.py`.
+- Verified GPU execution on NVIDIA GeForce RTX 4060 Laptop GPU with CUDA 12.4 (`bfloat16`).
+- Trained baseline B3 (raw ResNet-18) achieving validation BA 0.5147.
+- Generated and verified first platform-ready submission CSV: `submissions/sub_20260913-002207_resnet18_b3_raw_resnet18_s42.csv` (2,000 rows, class ratio 62.6% vs 63.6% prior, passed all broken-file tests).
 
 ---
