@@ -20,10 +20,11 @@ augmentation:
 training:
   epochs: 30
   batch_size: 32
-  learning_rate: 2e-4
+  learning_rate: 5e-5
   weight_decay: 0.05
   label_smoothing: 0.05
   mixed_precision: "bf16"
   early_stopping_patience: 5
+  warmup_epochs: 3
   num_workers: 0
   n_folds: 5

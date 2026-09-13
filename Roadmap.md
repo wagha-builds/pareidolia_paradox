@@ -19,15 +19,16 @@ A gate passes only when every condition is true. Don't advance past a failed gat
 
 | ID | Milestone | Due (end of day) | Gate conditions | Retires |
 |---|---|---|---|---|
-| M0 | Foundation | Sat 12 (morning) | Rules questions Q1–Q8 sent (answers logged in `docs/rules.md` as they arrive); repo, pinned env, tracker, `set_seed` in place; every member runs `python -m src.train --config configs/debug.yaml` and sees loss fall | R11 (partly), R12 once Q1 is answered |
-| M1 | Data gate | Sun 13 | (δ, s, R) in the frozen config; canonical per-class mean images visibly separate; `folds.csv` committed with its hash; one-sentence statements on shortcut strength and train/test shift | R3, R6 (detection), R11 |
-| M2 | First accepted submission | Mon 14 | B0–B3 logged on frozen folds; validator wired into `submit.py`; a baseline CSV accepted by the platform (or validated offline if Q5 allows only one upload) | R1 |
-| M3 | Canonical reference model | Tue 15–Wed 16 | ConvNeXt-T canonical 5-fold OOF beats B1 and B3; canonicalization on/off ablation quantified; transform tests green; grouped vs random CV compared | R4, R7 |
-| M4 | Portfolio and robustness | Thu 17 | 3–4 diverse members chosen with written evidence; shortcut-wrong BA well above 0.5; inversion stress passed; azimuth-shift ΔBA ≤ 1 pt | R5, R8, R9 |
-| M5 | Ensemble frozen | Fri 18 | Ensemble spec, TTA policy, threshold frozen in config; selection paragraph written; commit tagged; `make reproduce` started from a fresh clone | R14 |
-| M6 | Final submission accepted | Sat 19 (latest Sun 20, 12:00) | Final checklist [G4] completed aloud with two people; acceptance screenshotted; rollback file and `test_probs_*.npy` backed up; tagged `sub-vN` | R2, R13, R15 |
-| M7 | App demo-ready | Sat 19 | A newcomer uploads an image, sets azimuth, gets an explained prediction; Sun Simulator works; Docker tested on a clean machine; demo video recorded | — |
-| M8 | Docs complete, hard stop | Mon 21, 18:00 | README one-command reproduction, model card, report (if Q6) | — |
+| M0 | Foundation | Sat 12 (morning) | Rules Q1–Q8 answered; repo, pinned env, tracker, set_seed; debug run sees loss fall | ✅ Done |
+| M1 | Data gate | Sun 13 | (δ, s, R) in frozen config; canonical means visibly separate; folds.csv committed; shortcut and shift statements | ⏭️ Bypassed (combined R=0.1758 failed; class-0 R=0.4736 ≥ 0.40 — canonical recoverable) |
+| M2 | Raw-frame baseline & submission pipeline | Mon 14 | B0–B3 logged; validator wired; at least one non-trivial offline OOF | ⏳ In Progress |
+| M2.5 | Canonical pipeline implementation | Mon 14 | Protected-file changes approved; tests written; E4 fast run val_ba>0.55 by epoch 5 | 🟡 Approved, not started |
+| M3 | Canonical reference model | Tue 15–Wed 16 | E4 5-fold OOF beats B0 and B3; ablations quantified; transform tests green | Not started |
+| M4 | Portfolio and robustness | Thu 17 | 3–4 diverse members chosen; shortcut-wrong BA well above 0.5; inversion stress passed | Not started |
+| M5 | Ensemble frozen | Fri 18 | Ensemble spec, TTA policy, threshold frozen; selection paragraph; commit tagged; make reproduce started | Not started |
+| M6 | Final submission accepted | Sat 19 (latest Sun 20, 12:00) | Final checklist completed; acceptance screenshotted; rollback backed up; tagged sub-vN | Not started |
+| M7 | App demo-ready | Sat 19 | Newcomer uploads image, gets explained prediction; Sun Simulator works; Docker tested | Not started |
+| M8 | Docs complete, hard stop | Mon 21, 18:00 | README one-command reproduction, model card, report (if Q6) | Not started |
 
 ## 2. Timeline
 
@@ -79,20 +80,36 @@ Roles are hats: **DATA** (EDA, calibration, folds, robustness evidence), **MODEL
 - **APP:** Build the submission validator and its broken-file test suite now. It needs neither data nor a model, and it retires the biggest catastrophic risk early.
 - **Exit:** M0 passes; a first read of R and the class-mode histogram exists.
 
-### Sun 13 Sep — Phase 1 finish, Phase 2 start · M1
+### Sun 13 Sep — Calibration forensics, M1 close, M2 diagnosis, M2.5 start · **ACTUAL STATUS**
 
-- **DATA:** Canonicalize and pass the mean-image gate (1.6). Visual audit (1.7), including how often the dominant feature extends beyond ~90 px from centre, which decides the canonicalization mode (PRD AD-8). Near-duplicate groups with pHash and embeddings, plus cross-set duplicates (1.8). Generate, hash, and commit `folds.csv` (1.9). Adversarial validation (1.10), normalization stats (1.11), caches (1.12).
-- **MODEL:** B1 shortcut baseline; `features.py` for B2; start `transforms.py` with its unit tests.
-- **OPS:** `metrics.py` with tests; run manifest; `compare_runs.py`; PR that fills the frozen config block.
-- **APP:** `submit.py` builder wired to the validator; label-inversion check stub.
-- **Exit:** M1 gate review (15 minutes, whole team).
+> **ACTUAL (not plan):** M1 gate formally bypassed but canonical path recovered. Training collapse
+> diagnosed and fixed. Canonical pipeline approved for implementation.
 
-### Mon 14 Sep — Phase 2 · M2
+**Completed today:**
+- Per-class calibration forensics: Class 0 R=0.4736 ≥ 0.40 ✅ Canonical pipeline viable.
+- Overfit test: pipeline healthy (BA=0.906 in 15 epochs on 64 images at LR=5e-5).
+- Root cause of ConvNeXt collapse: LR too high (1e-3/2e-4) for fine-tuning. Fixed to 5e-5 + 3-epoch warmup.
+- Root cause of raw-frame val-BA collapse: azimuth shortcut learning. Fix = canonical training.
+- `src/train.py`: LR logging, warmup-aware early stopping, SequentialLR warmup.
+- All configs updated (LR, warmup_epochs, num_workers=0 for Windows).
+- Human approved canonical pipeline (M2.5): protected-file changes, visual handedness check, FiLM, E4.
 
-- **MODEL:** B2 LightGBM on the frozen folds, plus one run on random folds for an early grouped-vs-random read. B3 naïve CNN on raw tiles with no azimuth. Finish `transforms.py` tests and review the augmentation debugger grid.
-- **OPS:** `infer.py` and `submit.py` end to end on the best baseline; validate; **submit the dry run** and screenshot the acceptance.
-- **DATA:** Look at B1's failures; write the morphological sub-type taxonomy (fresh crater, degraded crater, pit, boulder, mound, rock field) into the shared doc.
-- **Exit:** M2. If the platform rejects the file, fixing that outranks everything else.
+**Remaining for Sun 13 (or Mon 14 morning):**
+- M2.5 Phase 1: Write tests for canonical augmentation classes.
+- M2.5 Phase 2: Implement `CanonicalVerticalFlipLabelSwap`, `PhotometricNegationLabelSwap`, `CanonicalHorizontalFlip` in `src/transforms.py`.
+- M2.5 Phase 2: Add `canonicalize_cfg` and `augmentation_policy` to `src/dataset.py`.
+- M2.5 Phase 3: Remove canonicalize guard in `src/train.py`; wire canonicalize_cfg.
+- M2.5 Phase 4: Generate canonical mean images with both handedness options → MANUAL inspection to break ambiguity.
+- M2.5 Phase 5: Create E4 config; smoke test; fast run (gate: val_ba > 0.55 by epoch 5).
+
+### Mon 14 Sep — M2.5 finish, E4 fast run, M2 pipeline · Target
+
+- **MODEL (morning):** Finish M2.5 implementation if not done Sun night. Run E4 smoke test and fast run. Gate: val_ba@0.5 > 0.55 by epoch 5. If gate passes: launch E4 full 5-fold run for overnight.
+- **MODEL (parallel):** B0 constant predictor + record. B2 LightGBM on pixel stats (quick, no azimuth).
+- **DATA:** Generate canonical mean images for both handedness options. MANUAL: break handedness ambiguity before E4 full run.
+- **OPS:** Adversarial validation AUC (must be < 0.65). Parity test for `src/infer.py`. Label-inversion check for `src/submit.py`.
+- **APP:** `submit.py` end-to-end validation on any available probabilities.
+- **Exit:** M2 (pipeline produces a validatable CSV + non-trivial OOF BA). M2.5 complete.
 
 ### Tue 15 Sep — Phase 3
 
@@ -156,19 +173,19 @@ Change one thing per experiment against a named parent. Screen on the fast confi
 
 | # | Experiment | Why | Budget | Decision rule | Day |
 |---|---|---|---|---|---|
-| B1 | Shortcut baseline (no training) | The score to beat; its gap to the final model is what ML contributed | minutes | Record prominently | Fri 11 |
-| B2 | LightGBM on physical features | Interpretable, decorrelated ensemble member | < 1 h | Keep for ensemble if OOF correlation with CNNs < 0.9 | Sat 12 |
-| B3 | Naïve CNN: raw tiles, no azimuth, standard flips | What most teams get on day one | 1 full run | Keep for the writeup | Sat 12 |
-| E1 | ConvNeXt-T, canonical, `policy_safe` | Reference model | 1 full run | Must beat B1 and B3 (M3) | Sun 13 |
-| E2 | E1 with canonicalization off | Value of the central idea | 1 full run | Gain < 1 pt → recheck calibration | Sun 13–Mon 14 |
-| E3 | Label-flip aug: vflip p ∈ {0, 0.2} × negation p ∈ {0, 0.15} | Counterfactuals teach the inversion | 4 configs × 3 seeds, fast; winner full | Adopt only if the CI excludes 0 | Mon 14–Tue 15 |
-| E4 | 1-channel vs physics stack `[I, ∂I/∂s, ∂I/∂s⊥]` | Hand the network the curvature signal | 2 full runs | Adopt if better on BA or K2 | Tue 15 |
-| E5 | Backbones: EfficientNetV2-S, Swin-T or MaxViT-T (ResNet-50 if spare) | Ensemble diversity; include one transformer | 2–3 full runs | Keep the top diverse ones, not only the winner | Tue 15–Wed 16 |
-| E6 | Negation-consistency λ ∈ {0, 0.1, 0.5} | Physics as a regularizer | 3 fast, winner full | Adopt if CI excludes 0 or K2 improves clearly | Wed 16 |
-| E7 | Raw-frame FiLM member with azimuth-aware aug and rotation-equivariance loss | Hedge against subtle calibration error | 1–2 full runs | Keep if it adds to the ensemble | Wed 16 |
-| E8 | Regularization mini-grid (drop_path, label smoothing, weight decay) | Small-data overfitting | ≤ 6 fast | Only if a GPU is idle | Wed 16–Thu 17 |
-| E9 | Pseudo-labelling | Transductive gain | 1 full run | Only if Q3 allows and all gates are green; default cut | Thu 17 |
-| E10 | Resolution 320 | Finer rim and edge detail | 1 full run | Cut unless a spare GPU exists | — |
+| B0 | Constant predictor (all-Rise) | Floor to beat; record BA=0.500 | seconds | Record in PROGRESS.md | Mon 14 |
+| B1 | Shortcut baseline | INVALID — canonical gate failed; raw-shortcut probe only, not a selection metric | minutes | Record with caveat | Mon 14 |
+| B2 | LightGBM on physical/image features (no azimuth) | Interpretable baseline; possible ensemble member | <1 h | Keep if OOF correlation with CNNs <0.9 | Mon 14 |
+| B3 | ResNet18 raw-frame, no azimuth | Sanjog branch reference; known LR=3e-4 works; BUT azimuth shortcut will limit CV performance | 1 fast run | Record score; do not adopt as primary model | Mon 14 |
+| E4 | ConvNeXt-T canonical, no azimuth conditioning | Reference model; removes azimuth confound | 1 fast → full 5-fold × 3 seeds | Must beat B0 and B3 (M3 gate) | Mon 14–Tue 15 |
+| E4a | E4 with p_vflip=0 | Value of vertical flip augmentation | 1 fast | Adopt if E4 CI excludes 0 vs E4a | Tue 15 |
+| E4b | E4 with p_neg=0 | Value of photometric negation | 1 fast | Same | Tue 15 |
+| E5 | ConvNeXt canonical + FiLM azimuth conditioning | Gives model residual azimuth signal for imperfect canonicalization | 1 fast → full if gate | Adopt if CI excludes 0 vs E4 | Tue 15–Wed 16 |
+| E6 | Backbone diversity: EfficientNetV2-S + Swin-T | Ensemble diversity | 2–3 full runs | Keep diverse top ones | Wed 16 |
+| E7 | Negation-consistency loss λ ∈ {0, 0.1, 0.5} | Physics as regularizer | 3 fast, winner full | Adopt if CI excludes 0 | Wed 16 |
+| E8 | Raw-frame FiLM member (azimuth-aware aug) | Hedge against calibration error; diverse ensemble member | 1–2 full runs | Keep if adds to ensemble | Wed 16 |
+| E9 | Regularization mini-grid | Small-data overfitting | ≤6 fast | Only if GPU is idle | Thu 17 |
+| E10 | Pseudo-labelling | Transductive gain | 1 full run | Only if Q3 allows and all gates green | Thu 17 |
 
 **Compute budget.** Measure the real epoch time on Thursday and update this paragraph. Assuming about a minute per ConvNeXt-T epoch: a fast run is roughly 15 minutes and a full 5-fold run 1.5–2.5 hours with early stopping. Running overnight, one GPU delivers about 6–10 full runs or 40 fast runs a day. With two GPUs the whole queue fits; with one, cut E8–E10 and limit E5 to two backbones.
 

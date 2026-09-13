@@ -1,0 +1,34 @@
+# Baseline B3: Naive CNN on raw tiles (ResNet-18)
+# Proven to work in sanjog branch at LR=3e-4 without warmup needed.
+# ResNet18 is BatchNorm-based and robust to higher LR during fine-tuning.
+# No azimuth conditioning — raw frame only.
+experiment:
+  name: "b3_raw_resnet18"
+  seed: 42
+
+data:
+  canonicalize: false
+
+model:
+  backbone: "resnet18"
+  in_chans: 1
+  pretrained: true
+  conditioning: "none"
+  drop_path_rate: 0.0
+
+augmentation:
+  brightness: 0.04
+  contrast: 0.08
+  noise_std: 0.01
+
+training:
+  epochs: 15
+  batch_size: 32
+  learning_rate: 3e-4
+  weight_decay: 0.01
+  label_smoothing: 0.05
+  mixed_precision: "bf16"
+  early_stopping_patience: 4
+  warmup_epochs: 0
+  num_workers: 0
+  n_folds: 5

@@ -86,11 +86,23 @@ def _train_one_fold(cfg, fold: int, train_idx, val_idx, labels, run_dir: Path, d
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, T_max=max(int(cfg.training.epochs), 1)
     )
+    warmup_epochs = int(cfg.training.get("warmup_epochs", 0))
+    if warmup_epochs > 0:
+        warmup = torch.optim.lr_scheduler.LinearLR(
+            optimizer, start_factor=0.1, end_factor=1.0, total_iters=warmup_epochs
+        )
+        cosine = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=max(int(cfg.training.epochs) - warmup_epochs, 1)
+        )
+        scheduler = torch.optim.lr_scheduler.SequentialLR(
+            optimizer, schedulers=[warmup, cosine], milestones=[warmup_epochs]
+        )
 
     best_ba = -1.0
     best_epoch = 0
     best_probs = np.zeros(len(val_idx), dtype=np.float32)
     patience = int(cfg.training.early_stopping_patience)
+    effective_warmup = int(cfg.training.get("warmup_epochs", 0))
     ckpt_dir = run_dir / "checkpoints"
     ckpt_dir.mkdir(parents=True, exist_ok=True)
 
@@ -128,10 +140,12 @@ def _train_one_fold(cfg, fold: int, train_idx, val_idx, labels, run_dir: Path, d
         probs_np = np.concatenate(probs)
         y_np = np.concatenate(y_true)
         val_ba = balanced_accuracy_score(y_np, apply_threshold(probs_np, 0.5))
+        current_lr = scheduler.get_last_lr()[0] if hasattr(scheduler, 'get_last_lr') else float(cfg.training.learning_rate)
         logging.info(
-            "fold=%s epoch=%s loss=%.4f val_ba@0.5=%.4f",
+            "fold=%s epoch=%s lr=%.2e loss=%.4f val_ba@0.5=%.4f",
             fold,
             epoch,
+            current_lr,
             float(np.mean(losses)),
             val_ba,
         )
@@ -148,8 +162,8 @@ def _train_one_fold(cfg, fold: int, train_idx, val_idx, labels, run_dir: Path, d
                 {"model": model.state_dict(), "epoch": epoch, "val_ba": val_ba},
                 ckpt_dir / f"fold{fold}_best.pt",
             )
-        elif epoch - best_epoch >= patience:
-            logging.info("fold=%s early stopping at epoch %s", fold, epoch)
+        elif epoch > effective_warmup and epoch - best_epoch >= patience:
+            logging.info("fold=%s early stopping at epoch %s (patience=%s, warmup=%s)", fold, epoch, patience, effective_warmup)
             break
 
     return best_probs, {"fold": fold, "best_ba_at_0_5": best_ba, "best_epoch": best_epoch}

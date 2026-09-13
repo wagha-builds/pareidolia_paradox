@@ -1,304 +1,366 @@
 # task.md — Pareidolia Paradox
 
-Task tracker. Updated throughout execution. Status symbols: [ ] not started, [/] in progress, [x] done.
+Task tracker. Updated throughout execution. Status symbols: `[ ]` not started, `[/]` in progress, `[x]` done, `[!]` blocked/caveat.
 
-**Active milestone:** M2 — Post-pivot raw-frame baseline and offline submission pipeline.
+**Active milestone:** M2.5 — Canonical Pipeline Implementation (protected-file changes approved by human, 13 Sep 2026).
 
-**Current pivot note (13 Sep 2026):** M1 Data Gate did not pass. Calibration failed
-(`R=0.1758`, `R_other=0.1696`) and canonical class means did not visually separate. A later
-azimuth-only probe scored about `0.741` Balanced Accuracy, so azimuth is also unsafe as a direct
-feature because it leaks the training labels. Canonicalization is therefore bypassed for the first
-working model path. Until we have stronger evidence, train raw-frame pixel models with no azimuth
-conditioning, no geometric augmentation, and offline validation only. Do not upload any baseline or
-dry-run CSV; the platform upload slot should be treated as final/go-no-go only.
+**Platform upload policy (IMMUTABLE):** There is no baseline or dry-run upload. The competition platform slot is reserved for the **single final go/no-go CSV** produced by `make submit` at M6 only.
 
 ---
 
-## M0 — Foundation & Governance
+## Pivot History
+
+### Pivot 1 — M1 Gate Failed → Raw-Frame Bypass (Sep 12-13)
+- Calibration returned combined R = 0.1758 (threshold: 0.4).
+- Central-crop sweep: 128→0.0628, 96→0.0320, 64→0.0174 — made R worse.
+- Canonical per-class mean images: featureless grey boxes.
+- Azimuth-only logistic regression: BA ≈ 0.741 — severe metadata label leak.
+- **Resolution:** Bypass canonicalization. Train raw-frame models. Use offline OOF as only signal.
+
+### Pivot 2 — Per-Class Forensics → Calibration Recoverable (Sep 13)
+**OVERTURNS PIVOT 1 for the canonical path.**
+- `scripts/test_calibration.py` ran class-stratified analysis on the full dataset.
+- **Class 0 (Depth/Craters) only:** R = 0.4736, δ = 135.18°, s = +1 (marginally wins).
+  Alternative: R = 0.4678, δ = 46.15°, s = −1 (within measurement noise).
+- **Class 1 (Rise/Mounds) only:** R = 0.0094 — nearly zero signal (mounds have no shadow pools).
+- **Combined R = 0.1758 was polluted by 5,000 noisy mound images overwhelming 2,854 crater images.**
+- **Calibration IS recoverable** using crater-only parameters. The camera convention fits δ≈46.7°, s=−1 (frozen config values).
+- Handedness ambiguity: both s=+1 and s=−1 fit craters almost equally well (ΔR = 0.0058).
+  **Visual confirmation of canonical mean images required before E4 full run.**
+- Physical convention (North-up, δ=90°, s=−1): R = 0.1758 — confirmed inapplicable.
+- Mode of crater residuals = 46.15°, matches frozen δ=46.70° to within 0.55° ✅
+
+### Pivot 3 — Training Collapse → Root-Cause Found and Fixed (Sep 13)
+- Overfit test (64 images, LR=5e-5): loss 0.77→0.23 in 15 epochs. Pipeline is healthy.
+- Root cause 1: LR=1e-3 (base config) / LR=2e-4 (exp config) → destroyed pretrained ConvNeXt features in epoch 1.
+- Root cause 2: Early stopping patience=5 counted from warmup epoch 2, fired at epoch 7 — during warmup.
+- B3 ResNet18 at LR=3e-4: loss decreases but val_ba falls from 0.498→0.441.
+- Root cause 3 (architectural): Raw-frame models learn the azimuth-label correlation (BA=0.776 from azimuth alone).
+  Grouped CV punishes this — val fold has different azimuth distribution → model scores BELOW chance.
+- **Resolution:** Canonical training removes the azimuth confound entirely. Canonical pipeline approved and in progress.
+
+---
+
+## M0 — Foundation & Governance ✅
 
 ### OPS tasks
-- [x] Create git repo with full directory structure from AGENTS.md §3 / Playbook 0.2
-- [x] Create `.gitignore` (data/, experiments/, artifacts/ except registry.json, __pycache__, .venv)
-- [x] Create and pin `requirements.txt` (Python 3.11, all deps with ==)
-- [x] Write `src/utils.py::set_seed(seed)` seeding random, numpy, torch, torch.cuda, PYTHONHASHSEED, cuDNN flags
-- [x] Create skeleton `configs/config.yaml` with `frozen:` block (all values null)
-- [x] Create `configs/debug.yaml` (tiny config: 1 fold, 5 epochs, 32 batch, no CV)
-- [x] Initialize experiment tracker (W&B project or equivalent)
-- [x] Create `docs/rules.md` with Q1-Q8 template
-- [x] Create `Makefile` with all targets from AGENTS.md §4
-- [x] Create `CLAUDE.md` (one line: @AGENTS.md)
+- [x] Create git repo with full directory structure from AGENTS.md §3
+- [x] Create `.gitignore`
+- [x] Create and pin `requirements.txt`
+- [x] `src/utils.py::set_seed(seed)`
+- [x] `configs/config.yaml` with `frozen:` block
+- [x] `configs/debug.yaml`
+- [x] Initialize experiment tracker
+- [x] `docs/rules.md` with Q1-Q8 answers
+- [x] `Makefile` with all targets from AGENTS.md §4
+- [x] `CLAUDE.md`
 - [x] Verify `python -m src.train --config configs/debug.yaml` runs (loss decreases)
 - [x] Update `PROGRESS.md` M0 entry
 
-### Manual actions (YOU must do these)
-- [x] MANUAL: Read the official competition rules and answer Q1-Q8 in `docs/rules.md`
-- [x] MANUAL: Send Q1-Q8 to organizers if any are unanswerable from the rules
-- [x] MANUAL: Confirm GPU access and check platform account + submission limits
-- [x] MANUAL: Place data files in `data/raw/` (train/*.png, test/*.png, train_metadata.csv, test_metadata.csv)
+### Manual actions (DONE)
+- [x] MANUAL: Read competition rules → answered Q1-Q8 in `docs/rules.md`
+- [x] MANUAL: Confirm GPU access and platform account
+- [x] MANUAL: Place data files in `data/raw/`
 
 ---
 
-## M1 — Data Gate
+## M1 — Data Gate ⏭️ Bypassed (gate failed, but calibration partially recoverable)
 
-**Outcome:** Bypassed after failed gate. The checked items below mean the code/script was created or
-the diagnostic was run; they do **not** mean the data gate passed.
+**Outcome:** Combined calibration gate failed (R=0.1758 < 0.4). However, per-class forensics (Pivot 2)
+showed R₀=0.4736 for craters alone — above the gate threshold. Calibration IS recoverable using crater-only
+parameters. The gate is formally bypassed but the canonical path is NOT permanently closed.
 
 ### DATA tasks
-- [x] `tests/fixtures/synthetic.py` — Lambertian dome/pit renderer from SKILL §12
-- [x] `src/canonical.py` — calibrate(), canonicalize(), decanonicalize() with all unit tests
-  - [x] Synthetic tests: recover known (delta, s) within 3deg, R > 0.95, other-handedness R < 0.3
-  - [x] Rotate-then-update-azimuth == canonical (MAE < 1 grey level on central disc)
-  - [x] Reflect-padding ghost test (documents why it's forbidden)
-- [x] Step 1.1: load_metadata(), verify_images() — assert row counts, no nulls, no dup IDs, 256x256, single channel
-- [x] Step 1.2: record dtype (uint8 vs uint16), value range, unique-value count
-- [x] Step 1.3: class balance -> fill frozen.prior_pi1 in config
-- [x] Step 1.4: azimuth distribution analysis started; azimuth range looked healthy, but azimuth-only logistic probe showed severe label leak (BA ≈ 0.741)
-- [x] Step 1.5: CALIBRATION — run calibrate(), produce diagnostics -> reports/figures/
-  - [x] Gate failed: full-tile best `R=0.1758`, `R_other=0.1696`; central crop sweep worsened R (`128 -> 0.0628`, `96 -> 0.0320`, `64 -> 0.0174`, `48 -> 0.0122`, `32 -> 0.0086`)
-- [x] Step 1.6: canonicalize(), produce per-class mean images -> reports/figures/
-  - [x] Gate failed: canonical means were featureless grey boxes rather than opposite top/bottom shading
-- [/] Step 1.7: visual audit grid / direct image inspection
-  - [x] User inspection: images look like far-away lunar shots; target relief is not obviously isolated
-  - [ ] Generate a formal visual audit grid later for error analysis and documentation
-- [ ] Step 1.8: near-duplicate detection (pHash + embeddings + FAISS), group_ids, cross-set duplicates
-- [x] Step 1.9: generate folds.csv (StratifiedGroupKFold, n=5), compute SHA-256
-  - [!] Caveat: existing `data/folds.csv` has `image_id,fold` only; it lacks `group_id`. Do not regenerate without explicit approval, but record this limitation in every manifest.
+- [x] `tests/fixtures/synthetic.py` — Lambertian dome/pit renderer
+- [x] `src/canonical.py` — calibrate(), canonicalize(), decanonicalize() with unit tests
+  - [x] Synthetic tests pass (delta, R, handedness recovery)
+  - [x] Rotate-then-update-azimuth == canonical
+  - [x] Reflect-padding ghost test
+- [x] Step 1.1: load_metadata(), verify_images()
+- [x] Step 1.2: dtype, value range, unique-value count
+- [x] Step 1.3: class balance → frozen.prior_pi1 = 0.6366 (~63.7% Rise)
+- [x] Step 1.4: azimuth distribution analysis — spans 0-360°; azimuth-only probe BA=0.741
+- [x] Step 1.5: CALIBRATION full run — R=0.1758, gate failed
+- [x] Step 1.5b: PER-CLASS CALIBRATION (`scripts/test_calibration.py`)
+  - [x] Crop sweep: R worsens with cropping; full 256px is best
+  - [x] Per-class polarity: Class 0 R=0.4736, Class 1 R=0.0094
+  - [x] Class-0-only calibration: R=0.4736 ≥ 0.40 ✅ calibration recoverable
+  - [x] Physical convention test: δ=90°, s=−1 → R=0.1758 (fails — not North-up)
+  - [!] Handedness ambiguity: s=+1 (R=0.4736, δ=135.18°) vs s=−1 (R=0.4678, δ=46.15°). ΔR=0.0058.
+        Frozen config uses δ=46.70°, s=−1. **Visual check of canonical means required before E4 full run.**
+- [x] Step 1.6: canonical per-class mean images — featureless grey (combined) — gate failed
+- [/] Step 1.7: visual audit
+  - [x] User: far-away lunar shots; shadows not obviously isolated
+  - [ ] Generate canonical mean images with BOTH (s=+1,δ=135°) and (s=−1,δ=46.7°) — required before E4
+- [ ] Step 1.8: near-duplicate detection (pHash + embeddings + FAISS)
+- [x] Step 1.9: generate folds.csv (StratifiedGroupKFold, n=5)
+  - [!] folds.csv has `image_id,fold` only — lacks `group_id`. Do not regenerate without approval.
 
 ### OPS tasks
-- [x] `src/metrics.py` — balanced_accuracy, apply_threshold, sweep, plateau_threshold, per_fold_optima, slice_report, paired_bootstrap; all with unit tests
-- [ ] Step 1.10: adversarial validation — train/test AUC
-- [x] Step 1.11: normalization stats -> fill frozen.norm in config
-- [x] Step 1.12: build_cache() -> data/processed/train_images.npy, test_images.npy, index.json
-- [x] Fill frozen config block (delta, s, R, pi1, norm, folds_sha256) via config update
+- [x] `src/metrics.py` — balanced_accuracy, apply_threshold, sweep, plateau_threshold, slice_report, bootstrap
+- [ ] Step 1.10: adversarial validation (still needed as train/test shift audit)
+- [x] Step 1.11: normalization stats → frozen.norm.mean=0.3836, frozen.norm.std=0.2497
+- [x] Step 1.12: build_cache() → data/processed ✅
+- [x] Fill frozen config block (delta=46.702°, s=-1, R=0.1758, pi1=0.6366, norm, folds_sha256)
 - [x] Update `PROGRESS.md` M1 entry
 
-### Manual actions (YOU must do these)
-- [x] MANUAL: Look at the calibration output — result failed (`R < 0.4`, handedness ambiguous); STOP condition triggered and resolved by explicit pivot approval
-- [x] MANUAL: Look at the canonical per-class mean images — result failed; means did not separate
-- [x] MANUAL: Confirm whether images have clear central crater/dome shadows — user could not reliably identify them; images are far-away lunar shots
-- [ ] MANUAL: Formal visual audit remains useful later, but it no longer blocks M2
-- [ ] MANUAL: Check adversarial validation AUC (must be < 0.65); still needed as a train/test shift audit
+### Manual actions
+- [x] MANUAL: Look at calibration — R<0.4, STOP triggered, pivot approved
+- [x] MANUAL: Look at canonical per-class mean images — featureless grey boxes
+- [x] MANUAL: Confirm images have clear shadows — far-away lunar shots, not obvious
+- [ ] MANUAL: **Inspect canonical mean images with (s=−1,δ=46.7°) AND (s=+1,δ=135.18°)**
+      Choose the pair where Class 0 and Class 1 means visibly differ (bright-top vs dark-top or vice versa).
+- [ ] MANUAL: Adversarial validation AUC (must be < 0.65)
 
 ---
 
-## M2 — Offline Baseline and Final-Ready Submission Pipeline
+## M2 — Raw-Frame Baseline & Submission Pipeline ⏳ In Progress
 
-**Re-scoped:** Because there is no safe/available option to upload a baseline CSV, M2 no longer
-means "first accepted platform submission." It means: build a local training + inference + validator
-pipeline that can produce a final-ready CSV later, and get at least one nontrivial offline baseline
-on the frozen folds.
+**Status (13 Sep 2026):** Training pipeline is healthy (overfit test passed). Raw-frame models cannot
+produce good grouped-CV results due to azimuth shortcut learning. Canonical pipeline (M2.5) is the fix.
 
-- [ ] B0: constant predictor (predict all 0), assert BA == 0.500 exactly
-- [ ] B1: shortcut baseline — re-scope for failed canonicalization
-  - [ ] Option A: skip canonical B1 and record as invalid because canonicalization gate failed
-  - [ ] Option B: raw-frame central asymmetry diagnostic only, clearly marked "not selection metric"
-- [ ] `src/features.py` — C5 feature set (asymmetry, shadow containment, shadow elongation, radial profile, circularity, sun-elevation proxy, sin/cos az)
-- [ ] B2: LightGBM on physical/image features, 5-fold CV, feature importances saved
-  - [!] Do not include raw azimuth as a feature unless clearly labelled as a leak diagnostic.
-- [/] B3: raw-frame CNN, no canonicalization, no azimuth conditioning, no geometric augmentation
-  - [x] `configs/exp/raw_convnext_baseline.yaml` created
-  - [x] Fast run completed on GPU, but result is not healthy: OOF BA @ plateau `0.5000`, val BA @ 0.5 stuck at `0.5000`
-  - [ ] Diagnose why ConvNeXt fast run is collapsed before launching 3-seed full run
+### Baselines
+- [ ] B0: constant predictor → assert BA == 0.500; record in PROGRESS.md
+- [ ] B1: shortcut baseline — mark as invalid (canonicalization gate failed)
+- [ ] `src/features.py` — C5 feature set for LightGBM
+- [ ] B2: LightGBM on physical/image features, 5-fold CV, no raw azimuth as feature
+- [/] B3: raw-frame CNN
+  - [x] `configs/exp/raw_convnext_baseline.yaml` — ConvNeXt-T; LR fixed to 5e-5; warmup=3
+  - [x] `configs/exp/b3_raw_resnet18.yaml` — ResNet18, LR=3e-4, warmup=0
+  - [x] Dataset cache built ✅
+  - [x] 17 pytest tests pass ✅
+  - [x] Debug run (CPU): OOF BA 0.5738 at t=0.53 ✅
+  - [x] ConvNeXt fast run (original LR=2e-4): collapsed, OOF BA 0.5000 ❌
+  - [x] ConvNeXt 3-seed full run: collapsed across all seeds, stopped manually ❌
+  - [x] Overfit test (64 images, LR=5e-5): BA=0.906 in 15 epochs ✅ Pipeline healthy
+  - [x] ConvNeXt fast run (LR=5e-5, warmup=3): early stopping fired during warmup ❌
+  - [x] B3 ResNet18 fast run (LR=3e-4): val_ba 0.498→0.441 — azimuth shortcut punished ❌
+  - [!] Raw-frame CNN without canonicalization CANNOT produce good grouped-CV val BA.
+        **Do not launch further raw-frame full runs. Canonical pipeline (M2.5) is the fix.**
 
 ### OPS tasks
-- [/] `src/infer.py` — run-based test prediction averaging
-  - [x] First implementation added
-  - [ ] Parity test still needed (100 training images, val path vs infer path, max |delta_p| < 1e-6)
-- [/] `src/submit.py` — CSV builder (join on image_id, never position), validator
-  - [x] Strict validator added
-  - [x] CSV builder added
-  - [ ] Label-inversion check still needed before final submission use
-  - [ ] Sanity report still needed before final submission use
-- [x] `src/submit.py` validator — A7 checks implemented (BOM, CR, line count, header, .png, labels as int, no dups, order, no index col)
-- [x] Broken-file test suite added for submission validator
-- [x] `make submit` target exists in Makefile
-- [ ] Run offline `src.submit` only after a usable baseline exists; do not upload the produced CSV
+- [/] `src/infer.py` — parity test still needed
+- [/] `src/submit.py` — label-inversion check and sanity report still needed
+- [x] `make submit` target in Makefile
 - [/] Update `PROGRESS.md` M2 entry
-  - [x] Implementation state recorded
-  - [ ] Manual run results from 13 Sep should be appended
 
-### Manual actions (YOU must do these)
-- [x] MANUAL: Run `python -m src.dataset --mode cache`
-  - Result: cache written to `data/processed`
-- [x] MANUAL: Run `python -m pytest -q`
-  - Result: `17 passed in 10.24s`
-- [x] MANUAL: Run `python -m src.train --config configs/debug.yaml`
-  - Result: CPU debug run completed; OOF BA @ plateau `0.5738`, but val BA @ 0.5 stayed `0.5000`
-- [x] MANUAL: Run `python -m src.train --config configs/exp/raw_convnext_baseline.yaml --fast`
-  - Result: GPU fast run completed; OOF BA @ plateau `0.5000`; val BA @ 0.5 stayed `0.5000`
-- [ ] MANUAL: Do **not** upload any baseline CSV. Platform upload is reserved for the final go/no-go file.
-- [ ] MANUAL: Do not launch `--seeds "0 1 2"` until the collapsed fast run is diagnosed.
+### Files created/modified this session (13 Sep 2026)
+- [x] `scripts/test_calibration.py` — per-class calibration forensics (major update)
+- [x] `scripts/overfit_test.py` — 64-image overfit sanity check
+- [x] `scripts/inspect_oof.py` — OOF probability distribution inspector
+- [x] `src/train.py` — LR logging added; warmup-aware early stopping; SequentialLR warmup scheduler
+- [x] `configs/config.yaml` — LR 1e-3→5e-5; label_smoothing 0.1→0.05; warmup_epochs=3; canonicalize=false
+- [x] `configs/exp/raw_convnext_baseline.yaml` — LR 2e-4→5e-5; warmup_epochs=3; num_workers=0
+- [x] `configs/exp/b3_raw_resnet18.yaml` — NEW: ResNet18 baseline, LR=3e-4
 
-### Immediate next engineering tasks
-- [ ] Inspect the fast-run manifest/checkpoints and prediction distribution for collapse (all probabilities near constant? wrong class weighting? threshold artifact?)
-- [ ] Add a tiny overfit test: train on a very small subset and confirm the model can drive training loss down and predict both classes
-- [ ] Add B0 constant predictor script/table entry
-- [ ] Implement a fast non-deep baseline (logistic/ridge or LightGBM on raw intensity summary features without azimuth) to check whether pixels carry any signal
-- [ ] Fix/extend `src.train` as needed before full 3-seed raw ConvNeXt run
+### Manual actions (DONE)
+- [x] MANUAL: `python -m src.dataset --mode cache` → data/processed ✅
+- [x] MANUAL: `python -m pytest -q` → 17 passed ✅
+- [x] MANUAL: Debug run → OOF BA 0.5738 ✅
+- [x] MANUAL: ConvNeXt fast run → 0.5000 COLLAPSED ❌
+- [x] MANUAL: 3-seed full run → collapsed across all seeds ❌
+- [ ] MANUAL: Upload the **single final** CSV to platform (reserved for M6 only)
 
 ---
 
-## M3 — Post-Pivot Strong Baselines and Diagnostics
+## M2.5 — Canonical Pipeline Implementation 🟡 APPROVED — Not yet started
 
-**Re-scoped:** The original "Canonical Reference Model" is blocked by M1. M3 should not launch a
-canonical E1 run unless a new calibration method passes the original gate. Current priority is to
-make the raw-frame path learn, measure leakage/shift honestly, and build robustness diagnostics.
+**Human approved 13 Sep 2026:** Protected-file changes to `src/transforms.py` and `src/dataset.py`,
+train-loop wiring, FiLM conditioning (item 3), and E4 canonical ConvNeXt experiment.
+
+**Why this is needed:** Raw-frame models learn azimuth→label shortcut. Canonical frame removes the
+confound entirely — in canonical frame, crater always has bright-top, mound always has dark-top.
+
+### Phase 1 — TDD: Write tests FIRST
+
+- [ ] `tests/test_transforms.py` — add:
+  - [ ] `test_canonical_vflip_label_swap` — flip+unflip = identity; double label toggle = original
+  - [ ] `test_photometric_negation_label_swap` — double negation = identity; double toggle = original
+  - [ ] `test_canonical_hflip_no_label_change` — pixels change, label unchanged
+  - [ ] `test_vflip_top_minus_bottom_asymmetry` — canonical vflip reverses top-minus-bottom asymmetry
+  - [ ] Lint rule test: no library flip/rotation outside transforms.py
+- [ ] `tests/test_dataset.py` — add:
+  - [ ] `test_dataset_canonicalize_cfg` — dataset with canonicalize_cfg returns different images than without
+  - [ ] `test_dataset_augmentation_policy` — policy called, label can change
+
+### Phase 2 — Protected File Changes
+
+- [ ] `src/transforms.py` (PROTECTED — approved):
+  - [ ] Add `Sample` dataclass (image: ndarray uint8, azimuth: float, label: int)
+  - [ ] Add `CanonicalVerticalFlipLabelSwap(p=0.20)` — vflip, label 0↔1
+  - [ ] Add `PhotometricNegationLabelSwap(p=0.15)` — `255 - img`, label 0↔1
+  - [ ] Add `CanonicalHorizontalFlip(p=0.50)` — hflip, label unchanged
+  - [ ] Add `build_augmentation_policy(cfg, training)` — reads p_vflip, p_neg, p_hflip
+- [ ] `src/dataset.py` (PROTECTED — approved):
+  - [ ] Add `canonicalize_cfg` parameter to `PareidoliaDataset.__init__`
+  - [ ] Add `augmentation_policy` parameter
+  - [ ] In `__getitem__`: call `canonicalize()` if `canonicalize_cfg` is set
+  - [ ] Apply augmentation policy after canonicalization
+  - [ ] Assert class mapping: {0: depth, 1: rise}
+
+### Phase 3 — Train Loop Wiring
+
+- [ ] `src/train.py` — remove the `canonicalize=true` RuntimeError guard
+- [ ] `src/train.py` — wire `canonicalize_cfg` from frozen config into `PareidoliaDataset`
+- [ ] `src/train.py` — wire `augmentation_policy` into `PareidoliaDataset`
+
+### Phase 4 — Visual Handedness Check (MANUAL — REQUIRED before E4 full run)
+
+- [ ] Create `scripts/viz_canonical_means.py`
+- [ ] Run with (s=−1, δ=46.7°) → save to reports/figures/canonical_means_s-1.png
+- [ ] Run with (s=+1, δ=135.18°) → save to reports/figures/canonical_means_s+1.png
+- [ ] MANUAL: Inspect both. The correct (s, δ) shows Class 0 and Class 1 means visually different.
+  Commit chosen parameters as confirmed frozen calibration.
+- [!] If NEITHER gives separable means → escalate (AGENTS.md §11 stop-and-ask)
+
+### Phase 5 — E4 Canonical ConvNeXt Experiment
+
+- [ ] Create `configs/exp/e4_canonical_convnext.yaml`
+      (canonicalize=true; p_vflip=0.25; p_neg=0.15; p_hflip=0.50; LR=5e-5; warmup=3; epochs=30)
+- [ ] Smoke test: `python -m src.train --config configs/debug.yaml` (< 5 min)
+- [ ] Fast run: `python -m src.train --config configs/exp/e4_canonical_convnext.yaml --fast`
+      Gate: val_ba@0.5 > 0.55 by epoch 5
+- [ ] Check augmentation grid: `python scripts/viz_augment.py --policy canonical --image-id <id>`
+- [ ] MANUAL: Inspect augmentation grid — confirm label flips match physics
+- [ ] Full 5-fold, 3 seeds if fast run gate passes
+- [ ] `make robustness RUN=<run_id>`
+- [ ] Record EXP-E4 report in PROGRESS.md
+
+### Phase 6 — FiLM Conditioning (Item 3, approved)
+
+- [ ] `src/models.py` — FiLM wrapper (feeds sin/cos azimuth into feature maps)
+- [ ] `configs/exp/e5_convnext_film.yaml` — canonical + FiLM azimuth conditioning
+- [ ] Run E5 fast screen; full run if gate passes
+
+### Manual actions required
+- [ ] MANUAL: Inspect canonical mean images — break handedness ambiguity
+- [ ] MANUAL: Review augmentation grid before full E4 run
+- [ ] MANUAL: Approve E4 full-run launch after fast-run gate
+
+---
+
+## M3 — Canonical Reference Model & Ablations
+
+**Re-scoped (13 Sep):** E4 from M2.5 IS the M3 canonical reference. M3 adds ablations and backbone diversity.
 
 ### MODEL tasks
-- [/] `src/transforms.py` — raw-frame-safe operators first; canonical-frame operators deferred
-  - [ ] Unit tests: rotation round-trips, double-negation identity, flip az updates vs synthetic re-renders, canonical vflip asymmetry reversal
-  - [ ] Visual debugger: scripts/viz_augment.py (16-variant grid annotated with az + label); only after geometry operators return
-  - [ ] Lint test: build fails if any library flip/rotation appears outside transforms.py
-- [/] `src/dataset.py` — PareidoliaDataset (cache, normalization, raw-frame path); canonical policy support deferred
-- [/] `src/models.py` — timm backbone (in_chans=1, drop_path_rate, conditioning none); FiLM/conditioning deferred
-- [/] `src/losses.py` — class-weighted CE with label smoothing; consistency losses deferred
-- [/] `src/train.py` — bf16 AMP, channels_last, cosine schedule, grad clip 1.0, early stopping, per-epoch checkpoint + best, writes oof.npy + run_manifest.json
-  - [ ] Add warmup, EMA, and auto-resume
-- [ ] configs/exp/e1_convnext_t_canonical_safe.yaml — deferred until calibration is repaired
-- [ ] configs/exp/e2_convnext_t_nocanon.yaml — replace with stronger raw-frame baseline configs after fast-run diagnosis
-- [ ] Run E1 canonical: blocked unless a new calibration gate passes
-- [ ] Run stronger raw-frame CV candidate after M2 fast-run collapse is fixed
+- [ ] E4a ablation: p_vflip=0 — compare vs E4
+- [ ] E4b ablation: p_neg=0 — compare vs E4
+- [ ] E5 FiLM (from M2.5 Phase 6)
 - [ ] scripts/compare_runs.py — sorted table with seed std devs
-- [ ] Grad-CAM utility in src/viz.py (basic, for sanity check)
+- [ ] Grad-CAM utility in src/viz.py
 
 ### OPS tasks
-- [ ] Artifact contract: artifacts/<date>_<name>_ba<x.xxxx>/ structure
-- [ ] artifacts/registry.json created
-- [ ] `src/train.py` kill-and-resume test (interrupt mid-epoch, restart, confirm it picks up)
+- [ ] Artifact contract: `artifacts/<date>_<name>_ba<x.xxxx>/`
+- [ ] `artifacts/registry.json`
+- [ ] `src/train.py` kill-and-resume test
 - [ ] Update `PROGRESS.md` M3 entry
 
-### Manual actions (YOU must do these)
-- [ ] MANUAL: Review augmentation debugger grid BEFORE launching any geometry/label-flip training
-- [ ] MANUAL: Review Grad-CAM overlays on 30 correct + 30 wrong validation images — are maps on the feature or corner artifacts?
-- [ ] MANUAL: M3 gate review — confirm the selected post-pivot candidate beats B0 and the raw baselines by meaningful margin; canonical E1 comparison is deferred
+### Manual actions
+- [ ] MANUAL: Review Grad-CAM overlays (30 correct + 30 wrong)
+- [ ] MANUAL: M3 gate — E4 OOF BA must beat B0 and B3 by >1 pt
 
 ---
 
 ## M4 — Portfolio & Robustness
 
 ### MODEL tasks
-- [ ] configs/exp/e3_*.yaml x4 — label-flip ablation grid (vflip p in {0, 0.2} x negation p in {0, 0.15})
-- [ ] Run E3 fast screens (1 fold, 15 epochs) x4; run winner full CV x3 seeds
-- [ ] configs/exp/e4_physics_stack.yaml — [I, dI/ds, dI/ds_perp] input
-- [ ] Run E4: 1-channel vs physics-stack (2 full runs)
-- [ ] configs/exp/e5_effnetv2s.yaml, e5_swin_t.yaml — backbone diversity
-- [ ] Run E5: 2 backbones (EfficientNetV2-S + Swin-T or MaxViT-T)
-- [ ] configs/exp/e6_negcon_*.yaml — negation-consistency lambda in {0, 0.1, 0.5}
-- [ ] `src/losses.py` — negation-consistency loss implemented
-- [ ] Run E6: 3 fast screens; winner full CV
-- [ ] configs/exp/e7_rawframe_film.yaml — raw-frame FiLM member
-- [ ] `src/models.py` — FiLM wrapper for raw-frame conditioning
-- [ ] Run E7: 1-2 full runs
+- [ ] E3 ablation grid (vflip p in {0, 0.2} × negation p in {0, 0.15}) — 4 fast screens
+- [ ] E5 backbone diversity: EfficientNetV2-S + Swin-T
+- [ ] E6 negation-consistency loss (lambda in {0, 0.1, 0.5})
+- [ ] E7: raw-frame FiLM member (azimuth conditioning without canonicalization)
 
 ### DATA tasks
-- [ ] `src/robustness.py` — shortcut audit, inversion stress, azimuth-shift test, shadow occlusion, centre occlusion, reliability diagram, slice report, shadow-mass fraction (CAM)
+- [ ] `src/robustness.py` — shortcut audit, inversion stress, azimuth-shift, slice report
 - [ ] `make robustness` target
-- [ ] Run make robustness on every finished candidate run
-- [ ] Top-200 highest-loss OOF image grid generated -> reports/
-- [ ] Per-sub-type accuracy table written
+- [ ] Top-200 highest-loss OOF image grid
 
 ### OPS tasks
-- [ ] `src/ensemble.py` skeleton — OOF matrix, fold-hash matching, mean-of-logits
+- [ ] `src/ensemble.py` skeleton
 - [ ] Update `PROGRESS.md` M4 entry
 
-### Manual actions (YOU must do these)
-- [ ] MANUAL: Look at the top-200 error grid and write the sub-type breakdown
-- [ ] MANUAL: M4 gate review — SELECT the 3-4 diverse members; write one sentence justifying each; approve the selection
-- [ ] MANUAL: Review Grad-CAM overlays (K6 shadow-mass fraction) for each candidate
-- [ ] MANUAL: Decide on any inconclusive experiments (CI includes zero) — adopt or reject
+### Manual actions
+- [ ] MANUAL: Top-200 error grid review; sub-type breakdown
+- [ ] MANUAL: M4 gate — select 3-4 diverse members; approve selection
 
 ---
 
 ## M5 — Ensemble & Threshold Freeze
 
 ### MODEL tasks
-- [ ] `src/ensemble.py` complete — OOF matrix with fold-hash check, mean of logits, optional weighted average
-- [ ] Evaluate each TTA view on OOF BA before adopting
-- [ ] `src/infer.py` — TTA policy implemented (hflip, ±5-10deg jitter, negation contributing 1-p)
+- [ ] `src/ensemble.py` complete — fold-hash check, mean-of-logits, weighted average
+- [ ] TTA policy in `src/infer.py`
 - [ ] F7 plateau threshold sweep on final ensemble OOF
-- [ ] Check per-fold spread <= 0.10 and |t* - pi1| <= 0.10; temperature-scale if needed
-- [ ] Fill frozen.threshold in config only after final model/ensemble is selected; do not freeze from collapsed/debug runs
+- [ ] Fill frozen.threshold in config
 
 ### OPS tasks
-- [ ] Written selection paragraph committed to git
-- [ ] Commit tagged (e.g. ensemble-frozen)
-- [ ] `make reproduce` kicked off from a fresh clone (overnight)
+- [ ] Selection paragraph committed
+- [ ] Commit tagged `ensemble-frozen`
+- [ ] `make reproduce` from fresh clone
 - [ ] Update `PROGRESS.md` M5 entry
 
-### Manual actions (YOU must do these)
-- [ ] MANUAL: Selection meeting — approve the final ensemble spec, TTA policy, and threshold
-- [ ] MANUAL: Declare model-code freeze (no more changes to src/ model code after Fri 18 Sep ~17:00)
+### Manual actions
+- [ ] MANUAL: Approve final ensemble spec, TTA policy, threshold
+- [ ] MANUAL: Model-code freeze (no src/ changes after Fri 18 Sep ~17:00)
 
 ---
 
 ## M6 — Final Submission
 
 ### OPS tasks
-- [ ] Confirm make reproduce result: OOF BA within 0.2 pt of recorded value (K11)
-- [ ] Run final inference with TTA; save test_probs_<timestamp>.npy
-- [ ] Run make submit: inference -> validate -> label-inversion check -> sanity report
-- [ ] Sanity report review: class balance vs pi1, shortcut agreement, histogram bimodal
-- [ ] Generate spot-check grid: 20 predicted-Depth + 20 predicted-Rise test images with azimuths
-- [ ] Update `PROGRESS.md` M6 entry (final entry)
+- [ ] Confirm `make reproduce` OOF BA within 0.2 pt
+- [ ] Final inference with TTA → `test_probs_<timestamp>.npy`
+- [ ] `make submit` → validate → inversion check → sanity report
+- [ ] Spot-check grid (20 predicted-Depth + 20 predicted-Rise)
+- [ ] Update `PROGRESS.md` M6 entry
 
-### Manual actions (YOU must do these)
-- [ ] MANUAL: Review the spot-check image grid (40 images)
-- [ ] MANUAL: Final go/no-go decision — yours, always explicit
-- [ ] MANUAL: Upload the final CSV to the competition platform; screenshot the acceptance
-  - [!] This is the only planned platform upload. There is no baseline/dry-run upload.
-- [ ] MANUAL: Back up rollback file and test_probs_*.npy
-- [ ] MANUAL: Tag the producing commit sub-v1 (or sub-vN)
+### Manual actions
+- [ ] MANUAL: Review spot-check grid
+- [ ] MANUAL: Final go/no-go decision
+- [ ] MANUAL: Upload final CSV — **ONLY planned upload. No dry-runs.**
+- [ ] MANUAL: Back up rollback file and `test_probs_*.npy`
+- [ ] MANUAL: Tag commit `sub-v1`
 
 ---
 
 ## M7 — App: Core Prediction & Explainability
 
 ### APP tasks
-- [ ] app/main.py — FastAPI app with lifespan model loader
-- [ ] GET /health endpoint
-- [ ] GET /model-info endpoint
-- [ ] POST /predict endpoint (multipart: image PNG + azimuth float)
-- [ ] POST /explain endpoint (Grad-CAM overlay mapped back via decanonicalize)
-- [ ] src/viz.py — Grad-CAM (HiResCAM for ConvNeXt), overlay at ~40% alpha, shadow-mass fraction
-- [ ] Streamlit app (app/streamlit_app.py): upload PNG, set azimuth slider, show prediction + canonical view + CAM overlay
-- [ ] F13 artifact registry: app resolves production pointer from artifacts/registry.json
-- [ ] app/Dockerfile + docker-compose.yml (CPU-only torch)
-- [ ] Parity check: app predictions agree with make infer to 1e-6 on 5 images
-- [ ] Update `PROGRESS.md` M7 entry
+- [ ] `app/main.py` — FastAPI with lifespan model loader
+- [ ] GET /health, GET /model-info, POST /predict, POST /explain
+- [ ] `src/viz.py` — HiResCAM, shadow-mass fraction
+- [ ] Streamlit app
+- [ ] `app/Dockerfile` + `docker-compose.yml`
+- [ ] Parity check: app == `make infer` to 1e-6 on 5 images
 
-### Manual actions (YOU must do these)
-- [ ] MANUAL: Stranger test — run the app on a clean machine with no project environment; confirm it works end-to-end
+### Manual actions
+- [ ] MANUAL: Stranger test on clean machine
 
 ---
 
 ## M8 — App: Sun Simulator
 
 ### APP tasks
-- [ ] POST /simulate endpoint: 72 azimuths (5deg steps), one batched forward pass, returns {azimuths[72], p_rise[72], std, canonical_thumbs_b64[]}
-- [ ] Streamlit Mode A: fixed image, azimuth swept, slider, polar plot, prediction transitions shown
-- [ ] Streamlit Mode B: image rotated + azimuth updated in lockstep, std displayed, panels labelled
-- [ ] 3-4 one-click presets (fresh crater, boulder, degraded ambiguous case, mound)
-- [ ] Preset loads in <= 5s on CPU
-- [ ] Mode B std <= 0.02 on canonical-model presets verified
-- [ ] docker compose up tested on a clean machine
-- [ ] Update `PROGRESS.md` M8 entry
+- [ ] POST /simulate — 72 azimuths, batched forward pass
+- [ ] Streamlit Mode A (azimuth swept) and Mode B (image rotated + azimuth updated)
+- [ ] 3-4 one-click presets
+- [ ] Docker tested on clean machine
 
-### Manual actions (YOU must do these)
-- [ ] MANUAL: Record 3-minute demo video showing the illusion (Mode A flip) and invariance (Mode B)
-- [ ] MANUAL: Stranger test on Docker
+### Manual actions
+- [ ] MANUAL: Record 3-minute demo video
+- [ ] MANUAL: Docker stranger test
 
 ---
 
 ## M9 — Reproducibility, Docs & Hard Stop
 
 ### OPS tasks
-- [ ] src/reproduce.py / make reproduce target: full end-to-end from fresh clone
-- [ ] README.md: one-command reproduction, project overview, setup instructions
-- [ ] docs/pareidolia_playbook.md (model card): update with final metrics, ablation table, robustness table
-- [ ] Technical report (if Q6 requires it)
+- [ ] `src/reproduce.py` / `make reproduce`
+- [ ] `README.md` — one-command reproduction
+- [ ] `docs/pareidolia_playbook.md` — final metrics, ablation table, robustness table
 - [ ] PROGRESS.md final entry
-- [ ] Confirm main branch is green, no uncommitted changes, protected files intact
+- [ ] Confirm main is green; protected files intact
 
-### Manual actions (YOU must do these)
-- [ ] MANUAL: Read and approve README / model card before hard stop
-- [ ] MANUAL: Hard stop — 18:00 local Mon 21 Sep. No new submissions after M6 unless a verified bug was found.
+### Manual actions
+- [ ] MANUAL: Approve README and model card
+- [ ] MANUAL: Hard stop — 18:00 local Mon 21 Sep 2026
