@@ -1,0 +1,44 @@
+# E4b Ablation — Canonical ConvNeXt-T without Photometric Negation Label Swap
+# Parent: E4 (configs/exp/e4_canonical_convnext.yaml)
+# Change: augmentation.p_neg = 0.0 (all other parameters identical to E4)
+#
+# Hypothesis:
+#   Removing photometric negation label-swap tests whether inverting pixel
+#   values (255 - x) provides essential regularization and contrast relief-inversion,
+#   or if geometric vertical flipping alone is sufficient.
+#
+# Rule: Change exactly ONE thing relative to parent (AGENTS.md §5).
+
+experiment:
+  name: "e4b_no_neg"
+  seed: 42
+
+data:
+  canonicalize: true
+
+model:
+  backbone: "convnext_tiny.fb_in22k_ft_in1k"
+  in_chans: 1
+  pretrained: true
+  conditioning: "none"
+  drop_path_rate: 0.1
+
+augmentation:
+  p_vflip: 0.25         # vertical flip → label swap
+  p_neg: 0.0            # ABLATION: no photometric negation label swap
+  p_hflip: 0.50         # horizontal flip → label unchanged
+  brightness: 0.04
+  contrast: 0.08
+  noise_std: 0.01
+
+training:
+  epochs: 30
+  batch_size: 32
+  learning_rate: 5.0e-5
+  weight_decay: 0.05
+  label_smoothing: 0.05
+  mixed_precision: "bf16"
+  early_stopping_patience: 5
+  warmup_epochs: 3
+  num_workers: 0
+  n_folds: 5

@@ -50,7 +50,9 @@ We eliminate the azimuth confound through rigorous coordinate transformation and
 |---|---|:---:|:---:|---|
 | **Constant / Random** | Baseline rule | 0.5000 | 0.5000 | Reference |
 | **Raw ConvNeXt-T (B3)** | Raw frame, no canonicalization | 0.5000 | ~0.5000 | ❌ Collapsed (Azimuth shortcut) |
-| **E4 Canonical ConvNeXt-T** | Canonical frame + physics augmentations | **0.7161** (Plateau $t^*=0.4850$) | **0.7376** | ✅ **Current Best (M3 Reference)** |
+| **E4 Canonical ConvNeXt-T** | Canonical frame + physics augmentations | **0.7161** (Plateau $t^*=0.4850$) | **0.7376** | ✅ **M3 Canonical Reference (5 Folds)** |
+| **E4a Ablation ($p_{\text{vflip}}=0$)** | No vertical flip label swap | 0.7815 (Fold 0 fast screen) | 0.7859 | Threshold drifts to $t^*=0.6025$ |
+| **E4b Ablation ($p_{\text{neg}}=0$)** | No photometric negation | **0.7824** (Fold 0 fast screen) | **0.7966** | Highest AUC, clean threshold $t^*=0.5175$ |
 
 *Per-fold scores for E4 (Seed 42): Fold 0: `0.7673`, Fold 1: `0.7735`, Fold 2: `0.7079`, Fold 3: `0.5799`, Fold 4: `0.7730`.*
 
@@ -70,6 +72,8 @@ pareidolia_paradox/
 │   ├── debug.yaml          # Fast smoke test configuration
 │   └── exp/
 │       ├── e4_canonical_convnext.yaml # Current best canonical model
+│       ├── e4a_no_vflip.yaml          # M3 ablation: p_vflip=0
+│       ├── e4b_no_neg.yaml            # M3 ablation: p_neg=0
 │       └── e5_convnext_film.yaml      # Canonical + FiLM azimuth conditioning
 ├── src/
 │   ├── canonical.py        # [PROTECTED] Calibration & canonical rotation routines
@@ -81,6 +85,7 @@ pareidolia_paradox/
 │   ├── submit.py           # [PROTECTED] Submission builder, validator & sanity check
 │   └── utils.py            # Reproducibility seeds, paths, logging
 ├── scripts/
+│   ├── compare_runs.py        # Standup experiment leaderboard & comparison table
 │   ├── viz_canonical_means.py # Visual handedness & class separation diagnostic
 │   ├── viz_augment.py         # 16-variant augmentation grid visualizer
 │   ├── test_calibration.py    # Per-class calibration forensics

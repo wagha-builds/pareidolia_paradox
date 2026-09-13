@@ -239,10 +239,10 @@ confound entirely — in canonical frame, crater always has bright-top, mound al
 **Re-scoped (13 Sep):** E4 from M2.5 IS the M3 canonical reference. M3 adds ablations and backbone diversity.
 
 ### MODEL tasks
-- [ ] E4a ablation: p_vflip=0 — compare vs E4
-- [ ] E4b ablation: p_neg=0 — compare vs E4
+- [x] E4a ablation: p_vflip=0 — Fold 0 BA: 0.7791 @ 0.5, 0.7815 @ t=0.6025 (Threshold shifted from 0.5375 to 0.6025 due to lost relief-inversion label balance)
+- [x] E4b ablation: p_neg=0 — Fold 0 BA: 0.7776 @ 0.5, 0.7824 @ t=0.5175 (Highest AUC: 0.7966, best calibrated threshold near 0.50)
 - [ ] E5 FiLM (from M2.5 Phase 6)
-- [ ] scripts/compare_runs.py — sorted table with seed std devs
+- [x] `scripts/compare_runs.py` — sorted table with seed std devs
 - [ ] Grad-CAM utility in src/viz.py
 
 ### OPS tasks
