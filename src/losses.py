@@ -9,4 +9,6 @@ def class_weights(labels) -> torch.Tensor:
 
 
 def build_loss(labels, label_smoothing: float = 0.0) -> nn.Module:
-    return nn.CrossEntropyLoss(weight=class_weights(labels), label_smoothing=label_smoothing)
+    return nn.CrossEntropyLoss(
+        weight=class_weights(labels), label_smoothing=label_smoothing
+    )

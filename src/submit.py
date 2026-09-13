@@ -5,7 +5,9 @@ from pathlib import Path
 import pandas as pd
 
 
-def validate_submission(path: str | Path, test_meta_path: str | Path = "data/raw/test_metadata.csv"):
+def validate_submission(
+    path: str | Path, test_meta_path: str | Path = "data/raw/test_metadata.csv"
+):
     path = Path(path)
     raw = path.read_bytes()
     if raw.startswith(b"\xef\xbb\xbf"):
@@ -60,7 +62,9 @@ def build_submission(run_dir: str | Path, threshold: float | None = None) -> Pat
         raise RuntimeError("Missing predictions for some test images")
     out_dir = Path("submissions")
     out_dir.mkdir(exist_ok=True)
-    path = out_dir / f"sub_{pd.Timestamp.now().strftime('%Y%m%d-%H%M')}_{run_dir.name}.csv"
+    path = (
+        out_dir / f"sub_{pd.Timestamp.now().strftime('%Y%m%d-%H%M')}_{run_dir.name}.csv"
+    )
     out.to_csv(path, index=False, lineterminator="\n")
     validate_submission(path)
     return path

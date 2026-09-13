@@ -39,7 +39,7 @@
 | M0 | Foundation & Governance | Sep 12 | ✅ Done | Yes |
 | M1 | Data Gate | Sep 13 | ⏭️ Bypassed | No (combined R=0.1758) |
 | M2 | Raw-Frame Baseline & Submission Pipeline | Sep 13-14 | ⏳ In Progress | — |
-| M2.5 | Canonical Pipeline Implementation | Sep 13-14 | 🟡 Approved, not started | — |
+| M2.5 | Canonical Pipeline Implementation | Sep 13-14 | ✅ Complete (Gate Passed) | Yes (Fast run BA=0.7737) |
 | M3 | Canonical Reference Model | Sep 14-15 | Not started | — |
 | M4 | Portfolio & Robustness | Sep 16-17 | Not started | — |
 | M5 | Ensemble & Threshold Freeze | Sep 18 | Not started | — |
@@ -72,7 +72,8 @@
 | B3 (naive CNN BA) — ResNet18 | **0.5082** at t=0.47 (azimuth shortcut) ❌ | M2 — raw-frame, shortcut |
 | Debug run OOF BA | **0.5738** at t=0.53 (CPU, 3 epochs, SmallCNN) | M2 — debug.yaml |
 | Overfit test (64 images, LR=5e-5) | **BA=0.906 at epoch 15** ✅ pipeline healthy | M2 — `scripts/overfit_test.py` |
-| E4 OOF BA (canonical ConvNeXt) | TBD | M2.5/M3 |
+| E4 fast run OOF BA (canonical ConvNeXt, 1 fold) | **0.7737** at t=0.5375 (AUC=0.7920, fold 0 best=0.7656) ✅ | M2.5 — `configs/exp/e4_canonical_convnext.yaml` |
+| E4 full run OOF BA (Seed 42, 5 folds) | **0.7161** at t=0.4850 (AUC=0.7376) ✅ | M2.5/M3 — `20260913-1701_convnext_tiny_fb_in22k_ft_in1k_e4_canonical_s42` |
 | Final ensemble OOF BA | TBD | M5 |
 | Frozen threshold t* | TBD | M5 |
 | Shortcut-wrong BA (K2) | TBD | M4 |
@@ -123,7 +124,7 @@
 - Calibration IS recoverable; canonical pipeline approved (M2.5).
 - Physical convention (North-up) does not apply — confirmed.
 - Frozen config values (δ=46.70°, s=−1) match crater-only mode residual to 0.55°.
-- **Handedness ambiguity remains:** s=+1 (R=0.4736, δ=135.18°) vs s=−1 (R=0.4678, δ=46.15°). ΔR=0.0058. Visual canonical mean inspection required.
+- **Handedness ambiguity resolved:** s=−1 confirmed visually via canonical means asymmetry (-18.30 vs +0.26).
 
 ---
 
@@ -166,22 +167,50 @@
 ---
 
 ### M2.5 — Canonical Pipeline Implementation
-**Date:** Approved 13 Sep 2026 | **Status:** 🟡 Not yet started
+**Date:** 13 Sep 2026 | **Status:** ✅ Complete — Gate Passed (E4 Fast Run OOF BA = 0.7737)
 
-**Approved scope:**
-1. Protected-file changes to `src/transforms.py` and `src/dataset.py` (TDD: tests first)
-2. Visual handedness check (generate canonical mean images for both s=+1 and s=−1)
-3. FiLM conditioning implementation in `src/models.py` (E5 experiment)
-4. E4 canonical ConvNeXt experiment
-
-**Expected outcome:** E4 val_ba@0.5 > 0.55 by epoch 5 of the fast run.
-**Reference:** sanjog branch achieved E4 OOF BA ~0.65-0.67.
+**Completed scope:**
+1. Protected-file changes to `src/transforms.py` and `src/dataset.py` with 40/40 pytest tests passing.
+2. Visual handedness check via `scripts/viz_canonical_means.py`: confirmed $s=-1, \delta=46.70^\circ$ (top-bottom asymmetry: Class 0 = -18.30 vs Class 1 = +0.26).
+3. 16-variant augmentation grid via `scripts/viz_augment.py`: visually verified label flips match lunar physics (vertical flip and photometric negation reverse shading polarity and flip label $0 \leftrightarrow 1$).
+4. FiLM conditioning implemented in `src/models.py` + `configs/exp/e5_convnext_film.yaml` ready.
+5. E4 canonical ConvNeXt fast run (`--fast`):
+   - Epoch 1: `val_ba@0.5 = 0.7039`
+   - Epoch 5: `val_ba@0.5 = 0.7434` (Gate `> 0.55` **PASSED**)
+   - Epoch 6: `val_ba@0.5 = 0.7656` (best checkpoint)
+   - OOF plateau BA at $t=0.5375$: **0.7737**, AUC: **0.7920**.
+   - Confirms that canonical frame rotation and physics augmentations completely eliminate the azimuth collapse.
 
 ---
 
-### M3 — Canonical Reference Model
-**Date:** Target Sep 14-15 | **Status:** Not started
+### EXP-E4: Canonical ConvNeXt Baseline (M3 Canonical Reference)
+**Hypothesis:** Rotating images to canonical frame (sun-at-top, $s=-1, \delta=46.702^\circ$) and augmenting with physics-preserving label flips (vflip $p=0.25$, neg $p=0.15$, hflip $p=0.50$) eliminates the azimuth-label shortcut and produces a well-generalizing lunar classifier.
 
-**Re-scoped:** E4 from M2.5 IS the M3 canonical reference. M3 adds ablations (p_vflip=0 vs E4, p_neg=0 vs E4) and backbone diversity.
+- **Run ID:** `20260913-1701_convnext_tiny_fb_in22k_ft_in1k_e4_canonical_s42`
+- **Config:** `configs/exp/e4_canonical_convnext.yaml`
+- **Folds SHA256:** `90291cbb8d41c4f899261e22bd30001ee76d0fc564c2ebe20270259c145e955e`
+- **Seed:** 42 | **Folds:** 5 (Full 7,854 OOF predictions)
+- **Results:**
+  - **OOF BA @ plateau $t^*=0.4850$:** **0.7161** (vs raw baseline B3 0.5000: **+21.61 pts**)
+  - **OOF ROC-AUC:** **0.7376**
+  - **Optimal threshold $t^*$:** **0.4850** (consistent with prior $\pi_1 = 0.6366$)
+  - **Per-fold breakdown (`best_ba_at_0_5`):**
+    - Fold 0: **0.7673** (epoch 6)
+    - Fold 1: **0.7735** (epoch 5)
+    - Fold 2: **0.7079** (epoch 10)
+    - Fold 3: **0.5799** (epoch 9)
+    - Fold 4: **0.7730** (epoch 12)
+- **Verdict:** **ADOPT** — Establish as the M3 Canonical Reference Model.
+
+---
+
+### M3 — Canonical Reference Model & Ablations
+**Date:** Target Sep 14-15 | **Status:** 🟡 Reference Established (E4 Seed 42 BA = 0.7161)
+
+**Next steps:**
+- E5 FiLM fast screen (`configs/exp/e5_convnext_film.yaml`)
+- Seeds 1 and 2 for E4 3-seed variance
+- Ablations: E4a ($p_{\text{vflip}}=0$), E4b ($p_{\text{neg}}=0$)
+- Model comparison utility (`scripts/compare_runs.py`)
 
 ---

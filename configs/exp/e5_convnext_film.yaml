@@ -1,0 +1,52 @@
+# E5 — Canonical ConvNeXt-T + FiLM azimuth conditioning
+# Parent: E4 (e4_canonical_convnext.yaml)
+# Change: model.conditioning="film" (azimuth sin/cos injected via FiLM MLP)
+#
+# Hypothesis:
+#   Even after canonicalization, small calibration errors (δ±0.55°, handedness
+#   ambiguity) leave residual azimuth signal. A FiLM layer can exploit this
+#   residual to improve robustness without letting the model revert to a pure
+#   shortcut (FiLM MLP is initialized near zero).
+#
+# FiLM architecture (src/models.py):
+#   backbone → global avg pool → features [B, D]
+#   (sin(az), cos(az)) → MLP(64) → gamma [B,D] + beta [B,D]
+#   modulated = features * (1 + gamma) + beta → head
+#   Gamma/beta init at zero → early training identical to E4.
+#
+# Decision rule: adopt if bootstrap CI excludes 0 vs E4.
+
+experiment:
+  name: "e5_canonical_film"
+  seed: 42
+
+data:
+  canonicalize: true
+
+model:
+  backbone: "convnext_tiny.fb_in22k_ft_in1k"
+  in_chans: 1
+  pretrained: true
+  conditioning: "film"     # → FiLMBackbone wrapper in src/models.py
+  drop_path_rate: 0.1
+  film_hidden: 64
+
+augmentation:
+  p_vflip: 0.25
+  p_neg: 0.15
+  p_hflip: 0.50
+  brightness: 0.04
+  contrast: 0.08
+  noise_std: 0.01
+
+training:
+  epochs: 30
+  batch_size: 32
+  learning_rate: 5.0e-5
+  weight_decay: 0.05
+  label_smoothing: 0.05
+  mixed_precision: "bf16"
+  early_stopping_patience: 5
+  warmup_epochs: 3
+  num_workers: 0
+  n_folds: 5

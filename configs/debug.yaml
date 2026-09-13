@@ -15,6 +15,14 @@ model:
   in_chans: 1
   pretrained: false # Don't download weights during debug
   conditioning: "none"
+
+augmentation:
+  brightness: 0.0
+  contrast: 0.0
+  noise_std: 0.0
+  p_vflip: 0.0
+  p_neg: 0.0
+  p_hflip: 0.0
   
 training:
   epochs: 5
@@ -26,3 +34,4 @@ training:
   mixed_precision: "fp16"
   early_stopping_patience: 2
   debug_mode: true # Flag for the training loop to run on a tiny subset
+  num_workers: 0   # Windows: mmap + spawn = OSError; keep 0

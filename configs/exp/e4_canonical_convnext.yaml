@@ -1,0 +1,58 @@
+# E4 — Canonical ConvNeXt-T (no azimuth conditioning)
+# Parent: raw_convnext_baseline (B3)
+# Change: data.canonicalize=true + canonical augmentation policy
+#
+# Physics rationale:
+#   In canonical frame (sun at top), craters always have bright-top/dark-bottom
+#   and mounds always have dark-top/bright-bottom. The model no longer needs to
+#   learn the azimuth-label mapping — it only needs to learn the shading pattern.
+#   This eliminates the azimuth shortcut that caused B3 val BA to fall below 0.5.
+#
+# Augmentation policy:
+#   p_vflip=0.25: flip rows → label swap (crater↔mound). Physics: a vflipped
+#     canonical crater looks exactly like a canonical mound.
+#   p_neg=0.15:   negate pixels → label swap. Physics: 255-img reverses polarity.
+#   p_hflip=0.50: flip cols → label unchanged. Physics: left-right symmetry.
+#   NO library flips. All go through transforms.py.
+#
+# Frozen parameters (from crater-only calibration, src/canonical.py):
+#   delta=46.702, s=-1 are read from configs/config.yaml frozen block.
+#
+# Fast-run gate: val_ba@0.5 > 0.55 by epoch 5.
+# Full-run gate: OOF BA > max(B0, B3) + 1 pt over 3 seeds.
+
+experiment:
+  name: "e4_canonical"
+  seed: 42
+
+data:
+  canonicalize: true
+
+model:
+  backbone: "convnext_tiny.fb_in22k_ft_in1k"
+  in_chans: 1
+  pretrained: true
+  conditioning: "none"
+  drop_path_rate: 0.1
+
+augmentation:
+  # Canonical label-flip augmentations (transforms.py handles physics correctly)
+  p_vflip: 0.25         # vertical flip → label swap
+  p_neg: 0.15           # photometric negation → label swap
+  p_hflip: 0.50         # horizontal flip → label unchanged
+  # Photometric jitter (no geometry)
+  brightness: 0.04
+  contrast: 0.08
+  noise_std: 0.01
+
+training:
+  epochs: 30
+  batch_size: 32
+  learning_rate: 5.0e-5
+  weight_decay: 0.05
+  label_smoothing: 0.05
+  mixed_precision: "bf16"
+  early_stopping_patience: 5
+  warmup_epochs: 3
+  num_workers: 0        # Windows: keep 0 (mmap + spawn = OSError)
+  n_folds: 5

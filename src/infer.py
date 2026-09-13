@@ -17,12 +17,18 @@ def predict_run(run_dir: str | Path, split: str = "test") -> pd.DataFrame:
     run_dir = Path(run_dir)
     cfg = OmegaConf.load(run_dir / "config.yaml")
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
-    ds = PareidoliaDataset("data", split, transform=build_transform(cfg_dict, training=False))
-    loader = DataLoader(ds, batch_size=int(cfg.training.batch_size), shuffle=False, num_workers=0)
+    ds = PareidoliaDataset(
+        "data", split, transform=build_transform(cfg_dict, training=False)
+    )
+    loader = DataLoader(
+        ds, batch_size=int(cfg.training.batch_size), shuffle=False, num_workers=0
+    )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     ckpts = sorted((run_dir / "checkpoints").glob("fold*_best.pt"))
     if not ckpts:
-        raise FileNotFoundError(f"No fold*_best.pt checkpoints found in {run_dir / 'checkpoints'}")
+        raise FileNotFoundError(
+            f"No fold*_best.pt checkpoints found in {run_dir / 'checkpoints'}"
+        )
 
     all_probs = []
     for ckpt_path in ckpts:
@@ -40,7 +46,9 @@ def predict_run(run_dir: str | Path, split: str = "test") -> pd.DataFrame:
 
     p_rise = np.mean(np.stack(all_probs, axis=0), axis=0).astype(np.float32)
     out = pd.DataFrame({"image_id": ids, "p_rise": p_rise})
-    pred_path = run_dir / f"test_probs_{pd.Timestamp.now().strftime('%Y%m%d-%H%M%S')}.npy"
+    pred_path = (
+        run_dir / f"test_probs_{pd.Timestamp.now().strftime('%Y%m%d-%H%M%S')}.npy"
+    )
     np.save(pred_path, p_rise)
     return out
 
