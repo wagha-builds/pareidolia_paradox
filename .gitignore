@@ -13,3 +13,4 @@ __pycache__/
 submissions/*
 !submissions/.gitkeep
 scratch/
+reports/figures/gradcam_*.png
