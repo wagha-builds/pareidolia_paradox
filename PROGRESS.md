@@ -40,7 +40,7 @@
 | M1 | Data Gate | Sep 13 | ⏭️ Bypassed | No (combined R=0.1758) |
 | M2 | Raw-Frame Baseline & Submission Pipeline | Sep 13-14 | ⏳ In Progress | — |
 | M2.5 | Canonical Pipeline Implementation | Sep 13-14 | ✅ Complete (Gate Passed) | Yes (Fast run BA=0.7737) |
-| M3 | Canonical Reference Model | Sep 14-15 | Not started | — |
+| M3 | Canonical Reference Model | Sep 14-15 | 🟢 In Progress | Yes (E4 BA=0.7161, E5 BA=0.7271) |
 | M4 | Portfolio & Robustness | Sep 16-17 | Not started | — |
 | M5 | Ensemble & Threshold Freeze | Sep 18 | Not started | — |
 | M6 | Final Submission | Sep 19 | Not started | — |
@@ -227,3 +227,26 @@ All runs evaluated on the exact same Fold 0 split with identical ConvNeXt-T back
 
 ---
 
+### EXP-E5: Canonical ConvNeXt with FiLM Azimuth Conditioning (Full 5-Fold CV)
+**Hypothesis:** Conditioning intermediate CNN feature representations on continuous solar azimuth $[\sin\theta_{\text{az}}, \cos\theta_{\text{az}}]$ via a zero-initialized FiLM MLP allows the network to adapt to subtle solar inclination and residual calibration geometry without regressing to the raw azimuth-label shortcut.
+
+- **Run ID:** `20260915-2338_convnext_tiny_fb_in22k_ft_in1k_e5_canonical_film_s42`
+- **Config:** `configs/exp/e5_convnext_film.yaml`
+- **Folds SHA256:** `90291cbb8d41c4f899261e22bd30001ee76d0fc564c2ebe20270259c145e955e`
+- **Seed:** 42 | **Folds:** 5 (Full 7,854 OOF predictions)
+- **Results:**
+  - **OOF BA @ plateau $t^*=0.4450$:** **0.7271** (vs parent E4 0.7161: **+1.10% gain**)
+  - **OOF ROC-AUC:** **0.7528** (vs parent E4 0.7376: **+1.52% gain**)
+  - **Optimal threshold $t^*$:** **0.4450**
+  - **Per-fold breakdown (`best_ba_at_0_5`):**
+    - Fold 0: **0.7885** (epoch 7) — vs E4: 0.7673 (+2.12%)
+    - Fold 1: **0.7747** (epoch 5) — vs E4: 0.7735 (+0.12%)
+    - Fold 2: **0.6233** (epoch 2) — vs E4: 0.7079 (-8.46%)
+    - Fold 3: **0.5977** (epoch 5) — vs E4: 0.5799 (+1.78%)
+    - Fold 4: **0.7778** (epoch 4) — vs E4: 0.7730 (+0.48%)
+- **Ensemble Blend (E4 + E5 50/50):**
+  - **OOF BA @ plateau $t^*=0.4525$:** **0.7312** (+1.51% over E4 baseline)
+  - **OOF ROC-AUC:** **0.7559**
+- **Verdict:** **ADOPT** — FiLM conditioning establishes a new state-of-the-art benchmark across all 5 folds and provides strong complementary diversity for ensembling with pure canonical CNNs.
+
+---

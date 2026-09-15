@@ -225,7 +225,10 @@ confound entirely — in canonical frame, crater always has bright-top, mound al
 ### Phase 6 — FiLM Conditioning (Item 3, approved)
 - [x] `src/models.py` — FiLM wrapper (feeds sin/cos azimuth into feature maps)
 - [x] `configs/exp/e5_convnext_film.yaml` — canonical + FiLM azimuth conditioning
-- [ ] Run E5 fast screen; full run if gate passes
+- [x] Run E5 fast screen (Fold 0 BA: 0.7899 @ t=0.4650, AUC: 0.7976)
+- [x] Run E5 full 5-fold CV run — **OOF BA @ plateau t=0.4450: 0.7271, AUC: 0.7528** (New Best!)
+      (Fold 0: 0.7885, Fold 1: 0.7747, Fold 2: 0.6233, Fold 3: 0.5977, Fold 4: 0.7778)
+- [x] E4 + E5 50/50 Ensemble Blend test: **OOF BA @ plateau t=0.4525: 0.7312, AUC: 0.7559**
 
 ### Manual actions required
 - [x] MANUAL: Inspect canonical mean images — break handedness ambiguity (Confirmed s=-1, delta=46.70°)
@@ -241,7 +244,7 @@ confound entirely — in canonical frame, crater always has bright-top, mound al
 ### MODEL tasks
 - [x] E4a ablation: p_vflip=0 — Fold 0 BA: 0.7791 @ 0.5, 0.7815 @ t=0.6025 (Threshold shifted from 0.5375 to 0.6025 due to lost relief-inversion label balance)
 - [x] E4b ablation: p_neg=0 — Fold 0 BA: 0.7776 @ 0.5, 0.7824 @ t=0.5175 (Highest AUC: 0.7966, best calibrated threshold near 0.50)
-- [x] E5 FiLM (from M2.5 Phase 6) — Fold 0 BA: 0.7860 @ 0.5, 0.7899 @ t=0.4650, AUC: 0.7976 (New Best across all models!)
+- [x] E5 FiLM Full 5-Fold — **OOF BA: 0.7271 @ t=0.4450, AUC: 0.7528** (Rank #1 across all 5-fold models)
 - [x] `scripts/compare_runs.py` — sorted table with seed std devs
 - [ ] Grad-CAM utility in src/viz.py
 
