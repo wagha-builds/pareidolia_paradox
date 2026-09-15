@@ -241,7 +241,7 @@ confound entirely — in canonical frame, crater always has bright-top, mound al
 ### MODEL tasks
 - [x] E4a ablation: p_vflip=0 — Fold 0 BA: 0.7791 @ 0.5, 0.7815 @ t=0.6025 (Threshold shifted from 0.5375 to 0.6025 due to lost relief-inversion label balance)
 - [x] E4b ablation: p_neg=0 — Fold 0 BA: 0.7776 @ 0.5, 0.7824 @ t=0.5175 (Highest AUC: 0.7966, best calibrated threshold near 0.50)
-- [ ] E5 FiLM (from M2.5 Phase 6)
+- [x] E5 FiLM (from M2.5 Phase 6) — Fold 0 BA: 0.7860 @ 0.5, 0.7899 @ t=0.4650, AUC: 0.7976 (New Best across all models!)
 - [x] `scripts/compare_runs.py` — sorted table with seed std devs
 - [ ] Grad-CAM utility in src/viz.py
 

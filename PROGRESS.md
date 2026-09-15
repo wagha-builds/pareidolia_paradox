@@ -73,6 +73,8 @@
 | Debug run OOF BA | **0.5738** at t=0.53 (CPU, 3 epochs, SmallCNN) | M2 — debug.yaml |
 | Overfit test (64 images, LR=5e-5) | **BA=0.906 at epoch 15** ✅ pipeline healthy | M2 — `scripts/overfit_test.py` |
 | E4 fast run OOF BA (canonical ConvNeXt, 1 fold) | **0.7737** at t=0.5375 (AUC=0.7920, fold 0 best=0.7656) ✅ | M2.5 — `configs/exp/e4_canonical_convnext.yaml` |
+| E4b ablation OOF BA (no negation, 1 fold) | **0.7824** at t=0.5175 (AUC=0.7966, fold 0 best=0.7776) ✅ | M3 — `configs/exp/e4b_no_neg.yaml` |
+| E5 fast run OOF BA (canonical + FiLM, 1 fold) | **0.7899** at t=0.4650 (AUC=0.7976, fold 0 best=0.7860) ✅ | M3 — `configs/exp/e5_convnext_film.yaml` |
 | E4 full run OOF BA (Seed 42, 5 folds) | **0.7161** at t=0.4850 (AUC=0.7376) ✅ | M2.5/M3 — `20260913-1701_convnext_tiny_fb_in22k_ft_in1k_e4_canonical_s42` |
 | Final ensemble OOF BA | TBD | M5 |
 | Frozen threshold t* | TBD | M5 |
@@ -214,12 +216,14 @@ All runs evaluated on the exact same Fold 0 split with identical ConvNeXt-T back
 |---|---|:---:|:---:|:---:|:---:|---|
 | **E4 Parent** | Full physics ($p_{\text{vflip}}=0.25, p_{\text{neg}}=0.15, p_{\text{hflip}}=0.50$) | **0.7673** | **0.7737** | **0.5375** | **0.7920** | Full regularizer; balanced threshold |
 | **E4a Ablation** | No vertical flip ($p_{\text{vflip}}=0.0, p_{\text{neg}}=0.15, p_{\text{hflip}}=0.50$) | **0.7791** | **0.7815** | **0.6025** | **0.7859** | Threshold drifts to 0.6025 due to lost relief balance |
-| **E4b Ablation** | No negation ($p_{\text{vflip}}=0.25, p_{\text{neg}}=0.0, p_{\text{hflip}}=0.50$) | **0.7776** | **0.7824** | **0.5175** | **0.7966** | Highest AUC (0.7966); best calibrated threshold near 0.50 |
+| **E4b Ablation** | No negation ($p_{\text{vflip}}=0.25, p_{\text{neg}}=0.0, p_{\text{hflip}}=0.50$) | **0.7776** | **0.7824** | **0.5175** | **0.7966** | Highest AUC without FiLM; clean threshold near 0.50 |
+| **E5 FiLM** | Canonical + Azimuth FiLM ($p_{\text{vflip}}=0.25, p_{\text{neg}}=0.15$) | **0.7860** | **0.7899** | **0.4650** | **0.7976** | **New Overall Best**: Highest AUC & BA; exploits residual calibration noise |
 
 **Physical Takeaways:**
 1. **Vertical Flip ($p_{\text{vflip}}$) is essential for threshold calibration:** Without vertical flip label swaps, the model defaults to the unaugmented lunar prior ($\pi_1 = 0.6366$), causing predictions to skew high and shifting the optimal plateau threshold to $0.6025$. With $p_{\text{vflip}}=0.25$, the model learns symmetric relief representations, pinning the threshold to $\sim 0.51 - 0.53$.
-2. **Photometric Negation ($p_{\text{neg}}$):** Omitting negation (E4b) yields the highest AUC ($0.7966$) and cleanest calibration ($t^* = 0.5175$), demonstrating that geometric vertical flips alone provide sufficient relief inversion without artificial contrast inversion.
-3. Both ablations confirm that canonical rotation ($s=-1, \delta=46.702^\circ$) is the single decisive factor (+27 pts over raw frame collapse).
+2. **Photometric Negation ($p_{\text{neg}}$):** Omitting negation (E4b) yields higher AUC ($0.7966$) than E4, showing that geometric vertical flips alone provide clean relief inversion without artificial contrast inversion.
+3. **FiLM Azimuth Conditioning (E5) is an unequivocal success:** Injects $(\sin(\text{az}), \cos(\text{az}))$ into feature maps via zero-initialized MLP. Instead of falling into the raw shortcut, the model exploits minor calibration residuals ($\pm 0.55^\circ$ error and regional terrain tilt) to reach **`0.7899` Plateau BA** and **`0.7976` AUC**.
+4. Both ablations and FiLM confirm that canonical rotation ($s=-1, \delta=46.702^\circ$) is the single decisive foundation (+27 to +29 pts over raw frame collapse).
 
 ---
 

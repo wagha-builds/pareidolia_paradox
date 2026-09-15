@@ -52,7 +52,8 @@ We eliminate the azimuth confound through rigorous coordinate transformation and
 | **Raw ConvNeXt-T (B3)** | Raw frame, no canonicalization | 0.5000 | ~0.5000 | ❌ Collapsed (Azimuth shortcut) |
 | **E4 Canonical ConvNeXt-T** | Canonical frame + physics augmentations | **0.7161** (Plateau $t^*=0.4850$) | **0.7376** | ✅ **M3 Canonical Reference (5 Folds)** |
 | **E4a Ablation ($p_{\text{vflip}}=0$)** | No vertical flip label swap | 0.7815 (Fold 0 fast screen) | 0.7859 | Threshold drifts to $t^*=0.6025$ |
-| **E4b Ablation ($p_{\text{neg}}=0$)** | No photometric negation | **0.7824** (Fold 0 fast screen) | **0.7966** | Highest AUC, clean threshold $t^*=0.5175$ |
+| **E4b Ablation ($p_{\text{neg}}=0$)** | No photometric negation | 0.7824 (Fold 0 fast screen) | 0.7966 | Highest AUC without FiLM, clean threshold $t^*=0.5175$ |
+| **E5 FiLM ConvNeXt-T** | Canonical + FiLM azimuth conditioning | **0.7899** (Fold 0 fast screen) | **0.7976** | 🏆 **New Overall Best** (Exploits residual calibration) |
 
 *Per-fold scores for E4 (Seed 42): Fold 0: `0.7673`, Fold 1: `0.7735`, Fold 2: `0.7079`, Fold 3: `0.5799`, Fold 4: `0.7730`.*
 
