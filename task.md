@@ -246,7 +246,8 @@ confound entirely — in canonical frame, crater always has bright-top, mound al
 - [x] E4b ablation: p_neg=0 — Fold 0 BA: 0.7776 @ 0.5, 0.7824 @ t=0.5175 (Highest AUC: 0.7966, best calibrated threshold near 0.50)
 - [x] E5 FiLM Full 5-Fold — **OOF BA: 0.7271 @ t=0.4450, AUC: 0.7528** (Rank #1 across all 5-fold models)
 - [x] `scripts/compare_runs.py` — sorted table with seed std devs
-- [ ] Grad-CAM utility in src/viz.py
+- [x] Grad-CAM utility in src/viz.py (supporting Grad-CAM & HiResCAM with decanonicalize mapping and Otsu shadow-mass fraction)
+- [x] `scripts/run_gradcam.py` — diagnostic suite generating correct & misclassified grids
 
 ### OPS tasks
 - [ ] Artifact contract: `artifacts/<date>_<name>_ba<x.xxxx>/`
@@ -255,8 +256,8 @@ confound entirely — in canonical frame, crater always has bright-top, mound al
 - [ ] Update `PROGRESS.md` M3 entry
 
 ### Manual actions
-- [ ] MANUAL: Review Grad-CAM overlays (30 correct + 30 wrong)
-- [ ] MANUAL: M3 gate — E4 OOF BA must beat B0 and B3 by >1 pt
+- [x] MANUAL: Review Grad-CAM overlays (30 correct + 30 wrong) — confirmed attention lands on crater rim illumination and crest highlights rather than pure shadow shortcut; SMF = 34.9%
+- [x] MANUAL: M3 gate — E4 OOF BA (0.7161) and E5 OOF BA (0.7271) beat B3 (0.5082) by +21.8 pts ✅ GATE PASSED
 
 ---
 
