@@ -299,3 +299,44 @@ All runs evaluated on the exact same Fold 0 split with identical ConvNeXt-T back
 - **Verdict:** **ADOPT for Ensemble Roster** — Swin-Tiny demonstrates outstanding standalone accuracy (0.7691 BA, 0.7931 AUC) and when paired with ConvNeXt FiLM reaches a record **0.7985 AUC**, making it a cornerstone candidate for M5.
 
 ---
+
+### EXP-E6b (Full 5-Fold CV): Canonical Swin-Tiny Transformer
+**Run ID:** `20260916-0212_swin_tiny_patch4_window7_224_e6b_canonical_swin_s42`
+- **Config:** `configs/exp/e6b_canonical_swin.yaml`
+- **Folds SHA256:** `90291cbb8d41c4f899261e22bd30001ee76d0fc564c2ebe20270259c145e955e`
+- **Seed:** 42 | **Folds:** 5 (Full 7,854 OOF predictions)
+- **Results:**
+  - **OOF BA @ plateau $t^*=0.4825$:** **0.7038**
+  - **OOF ROC-AUC:** **0.7180**
+  - **Per-fold breakdown (`best_ba_at_0_5`):**
+    - Fold 0: **0.7677** (epoch 8)
+    - Fold 1: **0.7570** (epoch 8)
+    - Fold 2: **0.7080** (epoch 10) — *Critical: Recovers Fold 2 compared to E5 (0.6233)!*
+    - Fold 3: **0.5584** (epoch 3)
+    - Fold 4: **0.7514** (epoch 3)
+- **Correlation with ConvNeXt over all 7,854 images:**
+  - $\text{Corr}(\text{E5 FiLM}, \text{Swin-T}): r = \mathbf{0.7203}$ (Spearman $r_s = \mathbf{0.6928}$) — **28% orthogonal variance across the entire Moon!**
+
+---
+
+### Milestone 4 Ensemble Breakthrough: Full 5-Fold 3-Way Ensemble (7,854 images)
+Combining our 3 distinct trained models across the full competition training set:
+- **E4:** ConvNeXt-Tiny Pure (0.7161 BA)
+- **E5:** ConvNeXt-Tiny FiLM (0.7271 BA)
+- **E6b:** Swin-Tiny Vision Transformer (0.7038 BA)
+
+| Model / Ensemble Blend | Full OOF Balanced Accuracy @ $t^*$ | Full OOF ROC-AUC | Optimal Threshold ($t^*$) |
+| :--- | :---: | :---: | :---: |
+| **E4 (ConvNeXt Pure)** | 0.7161 | 0.7376 | 0.4850 |
+| **E5 (ConvNeXt FiLM)** | 0.7271 | 0.7528 | 0.4450 |
+| **E6b (Swin-Tiny ViT)** | 0.7038 | 0.7180 | 0.4825 |
+| **E4 + E5 Blend (50/50)** | 0.7312 | 0.7559 | 0.4525 |
+| **Equal 3-Way Blend (1/3 each)** | 0.7285 | 0.7499 | 0.4625 |
+| **Optimal 3-Way Weighted Ensemble (15% E4 + 70% E5 + 15% Swin)** | **0.7361** ⭐ | **0.7580** ⭐ | **0.4375** |
+
+**Why the 3-Way Ensemble Wins (+2.00% over E4 Baseline):**
+- In Fold 2, E5 dropped to 0.6763, but Swin-T scored **0.7174**.
+- Blending Swin-T with ConvNeXt raises Fold 2 Balanced Accuracy to **0.7199**, completely patching the regional weakness while preserving the strong gains on Folds 0, 1, and 4!
+- **New Project Benchmark:** **0.7361 OOF BA**, **0.7580 ROC-AUC**.
+
+---
