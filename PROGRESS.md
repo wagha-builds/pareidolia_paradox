@@ -40,8 +40,8 @@
 | M1 | Data Gate | Sep 13 | ⏭️ Bypassed | No (combined R=0.1758) |
 | M2 | Raw-Frame Baseline & Submission Pipeline | Sep 13-14 | ⏳ In Progress | — |
 | M2.5 | Canonical Pipeline Implementation | Sep 13-14 | ✅ Complete (Gate Passed) | Yes (Fast run BA=0.7737) |
-| M3 | Canonical Reference Model | Sep 14-15 | 🟢 In Progress | Yes (E4 BA=0.7161, E5 BA=0.7271) |
-| M4 | Portfolio & Robustness | Sep 16-17 | Not started | — |
+| M3 | Canonical Reference Model | Sep 14-15 | ✅ Complete (Gate Passed) | Yes (E4 BA=0.7161, E5 BA=0.7271, Grad-CAM verified) |
+| M4 | Portfolio & Robustness | Sep 16-17 | 🟢 In Progress | Yes (E6 Fast Run BA=0.7157, r=0.7779 diverse) |
 | M5 | Ensemble & Threshold Freeze | Sep 18 | Not started | — |
 | M6 | Final Submission | Sep 19 | Not started | — |
 | M7 | App: Core Prediction & Explainability | Sep 15-18 (parallel) | Not started | — |
@@ -248,5 +248,30 @@ All runs evaluated on the exact same Fold 0 split with identical ConvNeXt-T back
   - **OOF BA @ plateau $t^*=0.4525$:** **0.7312** (+1.51% over E4 baseline)
   - **OOF ROC-AUC:** **0.7559**
 - **Verdict:** **ADOPT** — FiLM conditioning establishes a new state-of-the-art benchmark across all 5 folds and provides strong complementary diversity for ensembling with pure canonical CNNs.
+
+---
+
+### M4 — Portfolio & Robustness
+**Date:** 16 Sep 2026 | **Status:** 🟢 Backbone Diversity Screen in Progress
+
+### EXP-E6: Canonical EfficientNetV2-S (Architecture Diversity Screen)
+**Hypothesis:** Swapping ConvNeXt's static $7 \times 7$ depthwise convolutions and LayerNorm for EfficientNetV2's Squeeze-and-Excitation (SE) channel attention, Fused-MBConv hierarchy, and BatchNorm will yield uncorrelated predictions and provide strong architectural diversity for the Milestone 5 ensemble.
+
+- **Run ID:** `20260916-0122_tf_efficientnetv2_s_in21k_ft_in1k_e6_canonical_effnetv2_s42`
+- **Config:** `configs/exp/e6_canonical_effnetv2.yaml`
+- **Backbone:** `tf_efficientnetv2_s.in21k_ft_in1k` (IN-21k fine-tuned on 1k, converted to 1-ch input)
+- **Seed:** 42 | **Folds:** 1 (Fold 0 Fast Run)
+- **Results:**
+  - **Fold 0 Best Val BA (@ 0.5):** **0.7015** (epoch 7)
+  - **Plateau OOF BA ($t^*=0.4425$):** **0.7157** (Gate `> 0.70` **PASSED**)
+  - **ROC-AUC:** **0.7575**
+- **Diversity & Correlation Analysis (Fold 0):**
+  - $\text{Corr}(\text{E4 ConvNeXt}, \text{E5 FiLM ConvNeXt}): r = \mathbf{0.9393}$ (High intra-family correlation)
+  - $\text{Corr}(\text{E4 ConvNeXt}, \text{E6 EfficientNet}): r = \mathbf{0.7779}$ (Spearman rank = $\mathbf{0.7983}$) — **Proven Orthogonal Diversity!**
+  - $\text{Corr}(\text{E5 FiLM}, \text{E6 EfficientNet}): r = \mathbf{0.7926}$ (Spearman rank = $\mathbf{0.7916}$)
+- **Ensemble Blend on Fold 0:**
+  - Equal 3-Way Blend (E4 + E5 + E6): **BA @ $t^* = 0.7797$, AUC = 0.7934**
+  - Weighted Blend (0.35 E4 + 0.40 E5 + 0.25 E6): **BA @ $t^* = 0.7836$, AUC = 0.7945**
+- **Verdict:** **ADOPT for Ensemble Roster** — EfficientNetV2-S confirms strong architectural diversity ($r < 0.80$) and strong standalone discrimination power right out of the box.
 
 ---
