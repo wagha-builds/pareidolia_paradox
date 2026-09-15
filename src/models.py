@@ -149,6 +149,10 @@ def build_model(cfg: dict) -> nn.Module:
     drop_path = float(model_cfg.get("drop_path_rate", 0.0))
     conditioning = str(model_cfg.get("conditioning", "none")).lower()
 
+    extra_kwargs = {}
+    if "img_size" in model_cfg:
+        extra_kwargs["img_size"] = int(model_cfg["img_size"])
+
     if backbone == "small_cnn":
         base = SmallCNN(in_chans=in_chans)
     else:
@@ -161,6 +165,7 @@ def build_model(cfg: dict) -> nn.Module:
                 in_chans=in_chans,
                 num_classes=0 if conditioning == "film" else 2,
                 drop_path_rate=drop_path,
+                **extra_kwargs,
             )
         except Exception as exc:
             if pretrained:

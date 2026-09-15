@@ -1,0 +1,52 @@
+# E6b — Canonical Swin-Tiny Transformer (Vision Transformer Diversity)
+# Parent: e4_canonical_convnext (M3 Reference)
+# Change: model.backbone: convnext_tiny → swin_tiny_patch4_window7_224
+#
+# Architectural Diversity Rationale:
+#   ConvNeXt-T and EfficientNetV2-S are both convolutional.
+#   Swin-Tiny introduces Shifted-Window Self-Attention (non-convolutional).
+#   This allows pairwise attention between opposite edges of a crater or mound
+#   (connecting the illuminated rim directly with the shadow pool), providing
+#   maximum orthogonal feature representations for the Milestone 5 ensemble.
+#
+# Training recipe kept consistent with E4/E6:
+#   - Canonical frame rotation (s=-1, delta=46.702°)
+#   - Physics label flips: p_vflip=0.25, p_neg=0.15, p_hflip=0.50
+#   - LR=5e-5, warmup=3, weight_decay=0.05, label_smoothing=0.05, bf16
+#
+# Fast-run gate: Fold 0 Val BA > 0.70 by epoch 10.
+
+experiment:
+  name: "e6b_canonical_swin"
+  seed: 42
+
+data:
+  canonicalize: true
+
+model:
+  backbone: "swin_tiny_patch4_window7_224"
+  img_size: 256
+  in_chans: 1
+  pretrained: true
+  conditioning: "none"
+  drop_path_rate: 0.1
+
+augmentation:
+  p_vflip: 0.25         # vertical flip → label swap
+  p_neg: 0.15           # photometric negation → label swap
+  p_hflip: 0.50         # horizontal flip → label unchanged
+  brightness: 0.04
+  contrast: 0.08
+  noise_std: 0.01
+
+training:
+  epochs: 30
+  batch_size: 32
+  learning_rate: 5.0e-5
+  weight_decay: 0.05
+  label_smoothing: 0.05
+  mixed_precision: "bf16"
+  early_stopping_patience: 5
+  warmup_epochs: 3
+  num_workers: 0        # Windows: keep 0 (mmap + spawn = OSError)
+  n_folds: 5

@@ -264,7 +264,7 @@ confound entirely — in canonical frame, crater always has bright-top, mound al
 ## M4 — Portfolio & Robustness
 
 - [x] E6 backbone diversity: `configs/exp/e6_canonical_effnetv2.yaml` (EfficientNetV2-S) Fast Screen Fold 0 — **BA: 0.7157 @ t=0.4425, AUC: 0.7575** (Gate passed; Pearson r=0.7779 vs ConvNeXt confirms genuine architectural diversity)
-- [ ] Swin-T fast screen (hierarchical Vision Transformer candidate)
+- [x] Swin-T fast screen: `configs/exp/e6b_canonical_swin.yaml` (Swin-Tiny Transformer) Fold 0 — **BA: 0.7691 @ t=0.4450, AUC: 0.7931** (Gate passed; ConvNeXt + Swin blend reaches AUC 0.7985)
 - [ ] E7: raw-frame FiLM member (azimuth conditioning without canonicalization)
 
 ### DATA tasks

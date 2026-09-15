@@ -275,3 +275,27 @@ All runs evaluated on the exact same Fold 0 split with identical ConvNeXt-T back
 - **Verdict:** **ADOPT for Ensemble Roster** — EfficientNetV2-S confirms strong architectural diversity ($r < 0.80$) and strong standalone discrimination power right out of the box.
 
 ---
+
+### EXP-E6b: Canonical Swin-Tiny Transformer (Vision Transformer Diversity Screen)
+**Hypothesis:** Replacing local convolutional operations with Shifted-Window Self-Attention allows the model to compute direct pairwise attention between the bright northern crater rim and the dark southern shadow pool across the tile, creating an entirely non-convolutional feature representation for the Milestone 5 ensemble.
+
+- **Run ID:** `20260916-0150_swin_tiny_patch4_window7_224_e6b_canonical_swin_s42`
+- **Config:** `configs/exp/e6b_canonical_swin.yaml`
+- **Backbone:** `swin_tiny_patch4_window7_224` (with `img_size=256`, 1-ch input)
+- **Seed:** 42 | **Folds:** 1 (Fold 0 Fast Run)
+- **Results:**
+  - **Fold 0 Best Val BA (@ 0.5):** **0.7596** (epoch 8)
+  - **Plateau OOF BA ($t^*=0.4450$):** **0.7691** (Gate `> 0.70` **PASSED**)
+  - **ROC-AUC:** **0.7931** (Highest standalone AUC on Fold 0 outside FiLM!)
+- **Pairwise Correlations:**
+  - $\text{Corr}(\text{Swin-T}, \text{ConvNeXt E4}): r = 0.9444$
+  - $\text{Corr}(\text{Swin-T}, \text{FiLM E5}): r = 0.9311$ (Spearman $r_s = 0.8824$)
+  - $\text{Corr}(\text{Swin-T}, \text{EfficientNet E6}): r = \mathbf{0.7914}$
+- **Hybrid Ensemble Blends (CNN + Transformer on Fold 0):**
+  - **ConvNeXt FiLM (E5) + Swin-T (E6b) 50/50:** **BA @ $t^* = 0.7846$, AUC = 0.7985** (Highest ROC-AUC achieved on Fold 0!)
+  - **ConvNeXt Pure (E4) + Swin-T (E6b) 50/50:** **BA @ $t^* = 0.7778$, AUC = 0.7934**
+  - **3-Way Blend (E4 + E5 + Swin-T):** **BA @ $t^* = 0.7852$, AUC = 0.7960**
+  - **All 4 Diverse Models Equal Blend (E4 + E5 + E6 + Swin-T):** **BA @ $t^* = 0.7832$, AUC = 0.7942**
+- **Verdict:** **ADOPT for Ensemble Roster** — Swin-Tiny demonstrates outstanding standalone accuracy (0.7691 BA, 0.7931 AUC) and when paired with ConvNeXt FiLM reaches a record **0.7985 AUC**, making it a cornerstone candidate for M5.
+
+---
