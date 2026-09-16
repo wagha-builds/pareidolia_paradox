@@ -30,6 +30,9 @@ def predict_run(run_dir: str | Path, split: str = "test") -> pd.DataFrame:
             f"No fold*_best.pt checkpoints found in {run_dir / 'checkpoints'}"
         )
 
+    if "model" in cfg_dict:
+        cfg_dict["model"]["pretrained"] = False
+
     all_probs = []
     for ckpt_path in ckpts:
         model = build_model(cfg_dict).to(device)
@@ -39,8 +42,12 @@ def predict_run(run_dir: str | Path, split: str = "test") -> pd.DataFrame:
         probs = []
         ids = []
         with torch.no_grad():
-            for images, _, _, image_ids in loader:
-                probs.append(predict_proba(model, images.to(device)).cpu().numpy())
+            for images, az_sincos, _, image_ids in loader:
+                probs.append(
+                    predict_proba(model, images.to(device), az_sincos.to(device))
+                    .cpu()
+                    .numpy()
+                )
                 ids.extend(list(image_ids))
         all_probs.append(np.concatenate(probs))
 

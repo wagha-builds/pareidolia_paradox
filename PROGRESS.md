@@ -41,8 +41,8 @@
 | M2 | Raw-Frame Baseline & Submission Pipeline | Sep 13-14 | ⏳ In Progress | — |
 | M2.5 | Canonical Pipeline Implementation | Sep 13-14 | ✅ Complete (Gate Passed) | Yes (Fast run BA=0.7737) |
 | M3 | Canonical Reference Model | Sep 14-15 | ✅ Complete (Gate Passed) | Yes (E4 BA=0.7161, E5 BA=0.7271, Grad-CAM verified) |
-| M4 | Portfolio & Robustness | Sep 16-17 | 🟢 In Progress | Yes (E6 Fast Run BA=0.7157, r=0.7779 diverse) |
-| M5 | Ensemble & Threshold Freeze | Sep 18 | Not started | — |
+| M4 | Portfolio & Robustness | Sep 16-17 | ✅ Complete (Gate Passed) | Yes (Robustness audit, B1 shortcut audit, slice reports) |
+| M5 | Ensemble & Threshold Freeze | Sep 18 | ✅ Complete (Gate Passed) | Yes (3-way blend BA=0.7361, t*=0.4375 frozen, CI vs E4 +0.0182) |
 | M6 | Final Submission | Sep 19 | Not started | — |
 | M7 | App: Core Prediction & Explainability | Sep 15-18 (parallel) | Not started | — |
 | M8 | App: Sun Simulator | Sep 18-19 | Not started | — |
@@ -340,3 +340,37 @@ Combining our 3 distinct trained models across the full competition training set
 - **New Project Benchmark:** **0.7361 OOF BA**, **0.7580 ROC-AUC**.
 
 ---
+
+### Milestone 4 Data Task: Robustness & Shortcut Audit Suite
+Implemented `src/robustness.py` and `tests/test_robustness.py` covering:
+1. B1 Canonical Shadow Shortcut Audit (`b1_shortcut_ba = 0.5951`, fails on 43.1% of samples).
+2. Topographic Inversion Stress Test (vertical flip relief inversion).
+3. Solar Azimuth Perturbation Stability ($\pm 15^\circ$).
+4. Center Median Occlusion Stress Test.
+5. Slice Breakdown (8 solar azimuth octants, 5 regional folds) and worst-slice identification.
+6. Calibration Metrics (Expected Calibration Error & Brier Score).
+
+**Robustness Comparison Across Candidates:**
+
+| Model | OOF BA @ $t^*$ | OOF AUC | Shortcut-Wrong BA | Inversion-Stress BA | Az-Shift $\Delta$ | Calibration ECE |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **E4 (ConvNeXt Pure)** | 0.7161 (@ 0.4850) | 0.7376 | 0.5358 | 0.7122 | 0.0000 | 0.2022 |
+| **E5 (ConvNeXt FiLM)** | **0.7271** (@ 0.4450) | **0.7528** | **0.5597** | 0.6476 | 0.0065 | **0.1731** |
+| **E6b (Swin-Tiny ViT)** | 0.7038 (@ 0.4825) | 0.7180 | 0.5017 | **0.6991** | 0.0000 | 0.2129 |
+| **Final 3-Way Ensemble** | **0.7361** (@ 0.4375) | **0.7580** | **0.5619** ⭐ | — | — | 0.1834 |
+
+---
+
+### Milestone 5: Production Ensemble & Frozen Threshold Artifact
+- **Ensemble Spec:** `configs/ensemble.yaml` (0.15 E4 + 0.70 E5 + 0.15 Swin-T).
+- **Tool:** `src/ensemble.py` — verified identical `folds_sha256 = 90291cbb8d41...` across all 3 members, validated shapes (7,854,), blended OOF predictions, and froze optimal plateau threshold **$t^* = 0.4375$**.
+- **Metrics:**
+  - **Full OOF Balanced Accuracy:** **0.7361**
+  - **Full OOF ROC-AUC:** **0.7580**
+  - **Group-Level Paired Bootstrap (95% CI):**
+    - vs E4 Baseline: **+0.0182** [95% CI: +0.0048, +0.0307] (Statistically significant improvement!)
+    - vs E5 Best Single: **+0.0098** [95% CI: -0.0006, +0.0283]
+    - vs E6b Swin-T: **+0.0295** [95% CI: +0.0103, +0.0487]
+- **Production Artifact Directory:** `artifacts/20260916_ensemble_e4_e5_swin_ba0.7361/`
+  - Fully self-contained with `config.yaml`, `threshold.json` ($t^*=0.4375$), `metrics.json`, `norm_stats.json`, `calibration.json`, `class_map.json`, `members.json`, `git_sha.txt`.
+- **Registry:** Candidate registered in `artifacts/registry.json`.

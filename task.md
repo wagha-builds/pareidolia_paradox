@@ -268,8 +268,8 @@ confound entirely — in canonical frame, crater always has bright-top, mound al
 - [ ] E7: raw-frame FiLM member (azimuth conditioning without canonicalization)
 
 ### DATA tasks
-- [ ] `src/robustness.py` — shortcut audit, inversion stress, azimuth-shift, slice report
-- [ ] `make robustness` target
+- [x] `src/robustness.py` — shortcut audit, inversion stress, azimuth-shift, slice report
+- [x] `make robustness` target
 - [ ] Top-200 highest-loss OOF image grid
 
 ### OPS tasks
@@ -285,16 +285,17 @@ confound entirely — in canonical frame, crater always has bright-top, mound al
 ## M5 — Ensemble & Threshold Freeze
 
 ### MODEL tasks
-- [ ] `src/ensemble.py` complete — fold-hash check, mean-of-logits, weighted average
+- [x] `src/ensemble.py` complete — fold-hash check, mean-of-logits, weighted average
 - [ ] TTA policy in `src/infer.py`
-- [ ] F7 plateau threshold sweep on final ensemble OOF
+- [x] F7 plateau threshold sweep on final ensemble OOF (frozen at t*=0.4375, BA=0.7361)
 - [ ] Fill frozen.threshold in config
 
 ### OPS tasks
+- [x] Production candidate artifact packaged (`artifacts/20260916_ensemble_e4_e5_swin_ba0.7361`)
 - [ ] Selection paragraph committed
 - [ ] Commit tagged `ensemble-frozen`
 - [ ] `make reproduce` from fresh clone
-- [ ] Update `PROGRESS.md` M5 entry
+- [x] Update `PROGRESS.md` M5 entry
 
 ### Manual actions
 - [ ] MANUAL: Approve final ensemble spec, TTA policy, threshold

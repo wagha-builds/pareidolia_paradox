@@ -406,7 +406,11 @@ def run_robustness_suite(
     # 1. Load manifest and OOF
     manifest_path = run_dir / "run_manifest.json"
     oof_path = run_dir / "oof.npy"
-    config_path = run_dir / "config.yaml"
+    config_path = (
+        run_dir / "config.yaml"
+        if (run_dir / "config.yaml").exists()
+        else Path("configs/config.yaml")
+    )
 
     if not manifest_path.exists() or not oof_path.exists():
         raise FileNotFoundError(f"Missing run_manifest.json or oof.npy in {run_dir}")

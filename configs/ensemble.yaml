@@ -1,0 +1,14 @@
+name: ensemble_e4_e5_swin
+method: weighted_average
+members:
+  - run_id: 20260913-1701_convnext_tiny_fb_in22k_ft_in1k_e4_canonical_s42
+    weight: 0.15
+    name: e4_canonical_convnext
+  - run_id: 20260915-2338_convnext_tiny_fb_in22k_ft_in1k_e5_canonical_film_s42
+    weight: 0.70
+    name: e5_canonical_film
+  - run_id: 20260916-0212_swin_tiny_patch4_window7_224_e6b_canonical_swin_s42
+    weight: 0.15
+    name: e6b_canonical_swin
+output:
+  dir: experiments/ensemble_e4_e5_swin
