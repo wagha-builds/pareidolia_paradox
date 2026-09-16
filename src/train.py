@@ -93,10 +93,25 @@ def _train_one_fold(
         canonicalize_cfg=canonicalize_cfg,
         augmentation_policy=val_policy,
     )
+    sampler = None
+    if bool(cfg.training.get("azimuth_balanced_sampler", False)):
+        az_angles = train_ds.metadata.iloc[train_idx]["sun_azimuth_angle"].values
+        train_labels = labels[train_idx]
+        az_bins = np.digitize(az_angles, bins=[0.0, 90.0, 180.0, 270.0, 360.0]) - 1
+        az_bins = np.clip(az_bins, 0, 3)
+        cell_counts = {}
+        for b, y in zip(az_bins, train_labels):
+            cell_counts[(b, y)] = cell_counts.get((b, y), 0) + 1
+        sample_weights = [1.0 / cell_counts[(b, y)] for b, y in zip(az_bins, train_labels)]
+        sampler = torch.utils.data.WeightedRandomSampler(
+            weights=sample_weights, num_samples=len(sample_weights), replacement=True
+        )
+
     train_loader = DataLoader(
         train_ds,
         batch_size=int(cfg.training.batch_size),
-        shuffle=True,
+        shuffle=(sampler is None),
+        sampler=sampler,
         drop_last=True,
         num_workers=int(cfg.training.get("num_workers", 0)),
         pin_memory=(device.type == "cuda"),
@@ -238,7 +253,10 @@ def _train_one_fold(
 
 
 def train_cv(
-    config_path: str, fast: bool = False, seed_override: int | None = None
+    config_path: str,
+    fast: bool = False,
+    seed_override: int | None = None,
+    fold_override: int | None = None,
 ) -> Path:
     cfg = _load_config(config_path)
     seed = int(seed_override if seed_override is not None else cfg.experiment.seed)
@@ -265,8 +283,14 @@ def train_cv(
     run_dir.mkdir(parents=True, exist_ok=False)
     OmegaConf.save(cfg, run_dir / "config.yaml")
 
-    n_folds = 1 if (fast or debug_mode) else int(cfg.training.get("n_folds", 5))
-    fold_ids = sorted(merged["fold"].unique().astype(int).tolist())[:n_folds]
+    if fold_override is not None:
+        fold_ids = [int(fold_override)]
+    elif "fold" in cfg.training:
+        fold_ids = [int(cfg.training.fold)]
+    else:
+        n_folds = 1 if (fast or debug_mode) else int(cfg.training.get("n_folds", 5))
+        fold_ids = sorted(merged["fold"].unique().astype(int).tolist())[:n_folds]
+
     oof = np.full(len(merged), np.nan, dtype=np.float32)
     fold_metrics = []
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -319,11 +343,12 @@ def main():
     parser.add_argument("--config", type=str, default="configs/debug.yaml")
     parser.add_argument("--fast", action="store_true")
     parser.add_argument("--seeds", type=str, default="")
+    parser.add_argument("--fold", type=int, default=None, help="Train specific fold only")
     args = parser.parse_args()
 
     seeds = [int(s) for s in args.seeds.split() if s.strip()] or [None]
     for seed in seeds:
-        train_cv(args.config, fast=args.fast, seed_override=seed)
+        train_cv(args.config, fast=args.fast, seed_override=seed, fold_override=args.fold)
 
 
 if __name__ == "__main__":

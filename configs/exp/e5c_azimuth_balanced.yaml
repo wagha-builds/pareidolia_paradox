@@ -1,0 +1,45 @@
+# E5c — Canonical ConvNeXt-T + FiLM + Azimuth-Balanced Sampling
+# Parent: E5 (e5_convnext_film.yaml)
+# Change: training.azimuth_balanced_sampler=true, p_vflip=0.35, p_neg=0.20
+#
+# Hypothesis:
+#   85% of craters in the training folds are in azimuth 270°-360°,
+#   while only 2.8% of craters are in 0°-90°. This causes crater recall to collapse
+#   on Fold 3 (which is concentrated in 0°-51°).
+#   Balancing the sampling joint distribution across 4 azimuth quadrants x 2 classes
+#   forces the model to see equal craters and mounds under all solar lighting angles.
+
+experiment:
+  name: "e5c_azimuth_balanced"
+  seed: 42
+
+data:
+  canonicalize: true
+
+model:
+  backbone: "convnext_tiny.fb_in22k_ft_in1k"
+  in_chans: 1
+  pretrained: true
+  conditioning: "film"
+  drop_path_rate: 0.1
+  film_hidden: 64
+
+augmentation:
+  p_vflip: 0.35
+  p_neg: 0.20
+  p_hflip: 0.50
+  brightness: 0.04
+  contrast: 0.08
+  noise_std: 0.01
+
+training:
+  epochs: 30
+  batch_size: 32
+  learning_rate: 5.0e-5
+  weight_decay: 0.05
+  label_smoothing: 0.05
+  mixed_precision: "bf16"
+  early_stopping_patience: 5
+  warmup_epochs: 3
+  n_folds: 5
+  azimuth_balanced_sampler: true

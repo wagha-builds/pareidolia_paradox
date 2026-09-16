@@ -338,6 +338,43 @@ def build_and_evaluate_ensemble(spec_path: str | Path):
     print("=" * 75 + "\n")
 
 
+def predict_ensemble(
+    spec_path: str | Path, split: str = "test", tta: bool = True
+) -> pd.DataFrame:
+    """Run test inference across all ensemble members and blend predictions with TTA."""
+    from .infer import predict_run
+
+    spec_path = Path(spec_path)
+    spec = OmegaConf.to_container(OmegaConf.load(spec_path), resolve=True)
+    members = spec.get("members", [])
+    weights = [float(m.get("weight", 1.0)) for m in members]
+    total_w = sum(weights)
+    norm_weights = [w / total_w for w in weights]
+
+    member_probs = []
+    image_ids = None
+    for m in members:
+        run_id = m["run_id"]
+        run_dir = Path("experiments") / run_id if not Path(run_id).exists() else Path(run_id)
+        df_pred = predict_run(run_dir, split=split, tta=tta)
+        member_probs.append(df_pred["p_rise"].to_numpy())
+        if image_ids is None:
+            image_ids = df_pred["image_id"].tolist()
+
+    method = spec.get("method", "weighted_average")
+    p_ens = blend_predictions(member_probs, norm_weights, method=method)
+    out_df = pd.DataFrame({"image_id": image_ids, "p_rise": p_ens})
+
+    out_dir = Path(spec.get("output", {}).get("dir", "experiments/ensemble"))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    tag = "tta" if tta else "raw"
+    pred_path = out_dir / f"test_probs_{tag}_{pd.Timestamp.now().strftime('%Y%m%d-%H%M%S')}.npy"
+    np.save(pred_path, p_ens)
+    out_df.to_csv(out_dir / "test_predictions.csv", index=False)
+    print(f"Ensemble test predictions written to {out_dir / 'test_predictions.csv'}")
+    return out_df
+
+
 def main():
     parser = argparse.ArgumentParser(description="Ensemble builder and evaluator.")
     parser.add_argument(
@@ -346,8 +383,21 @@ def main():
         default="configs/ensemble.yaml",
         help="Path to ensemble spec YAML",
     )
+    parser.add_argument(
+        "--infer",
+        action="store_true",
+        help="Run test inference across ensemble members and blend",
+    )
+    parser.add_argument(
+        "--no-tta",
+        action="store_true",
+        help="Disable TTA during inference",
+    )
     args = parser.parse_args()
-    build_and_evaluate_ensemble(args.spec)
+    if args.infer:
+        predict_ensemble(args.spec, tta=not args.no_tta)
+    else:
+        build_and_evaluate_ensemble(args.spec)
 
 
 if __name__ == "__main__":
