@@ -39,6 +39,9 @@ class SmallCNN(nn.Module):
             nn.Linear(64, num_classes),
         )
 
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net[:-1](x)
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
 
@@ -116,6 +119,87 @@ class FiLMBackbone(nn.Module):
         return self.head(feats)
 
 
+class GradientReversal(torch.autograd.Function):
+    """Gradient Reversal Layer for domain-adversarial / shortcut-debiasing training."""
+
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, lam: float) -> torch.Tensor:
+        ctx.lam = lam
+        return x.view_as(x)
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor):
+        return -ctx.lam * grad_output, None
+
+
+class AdversarialBackbone(nn.Module):
+    """Backbone with adversarial azimuth-quadrant head for shortcut removal.
+
+    Forces backbone representations to be invariant to azimuth quadrant
+    while optimizing the primary relief classification head.
+    """
+
+    def __init__(
+        self,
+        backbone: nn.Module,
+        feature_dim: int,
+        num_classes: int = 2,
+        num_az_classes: int = 4,
+        adv_lambda: float = 0.5,
+        film_hidden: int = 64,
+    ) -> None:
+        super().__init__()
+        self.backbone = backbone
+        self.feature_dim = feature_dim
+        self.adv_lambda = adv_lambda
+
+        # FiLM modulation for classification branch
+        self.film_mlp = nn.Sequential(
+            nn.Linear(2, film_hidden),
+            nn.SiLU(),
+            nn.Linear(film_hidden, 2 * feature_dim),
+        )
+        self.head = nn.Linear(feature_dim, num_classes)
+
+        # Adversarial azimuth quadrant head (4 quadrants: 0-90, 90-180, 180-270, 270-360)
+        self.az_head = nn.Sequential(
+            nn.Linear(feature_dim, 64),
+            nn.SiLU(),
+            nn.Linear(64, num_az_classes),
+        )
+
+        nn.init.zeros_(self.film_mlp[-1].weight)
+        nn.init.zeros_(self.film_mlp[-1].bias)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        az_sincos: torch.Tensor,
+        return_az_logits: bool = False,
+    ) -> torch.Tensor | tuple[torch.Tensor, torch.Tensor]:
+        if hasattr(self.backbone, "forward_features"):
+            feats = self.backbone.forward_features(x)
+        else:
+            feats = self.backbone(x)
+
+        if feats.dim() == 4:
+            feats = feats.mean(dim=(-2, -1))
+        elif feats.dim() == 3:
+            feats = feats[:, 0]
+
+        gamma_beta = self.film_mlp(az_sincos)
+        gamma, beta = gamma_beta.chunk(2, dim=1)
+        modulated = feats * (1.0 + gamma) + beta
+        main_logits = self.head(modulated)
+
+        if return_az_logits:
+            reversed_feats = GradientReversal.apply(feats, self.adv_lambda)
+            az_logits = self.az_head(reversed_feats)
+            return main_logits, az_logits
+
+        return main_logits
+
+
 def _get_feature_dim(model: nn.Module, in_chans: int = 1) -> int:
     """Probe the backbone for its output feature dimension."""
     model.eval()
@@ -140,7 +224,7 @@ def build_model(cfg: dict) -> nn.Module:
         cfg: full config dict (OmegaConf-resolved to plain dict).
 
     Returns:
-        nn.Module — either a plain backbone or a FiLMBackbone wrapper.
+        nn.Module — either a plain backbone, FiLMBackbone, or AdversarialBackbone wrapper.
     """
     model_cfg = cfg.get("model", {})
     backbone = str(model_cfg.get("backbone", "small_cnn"))
@@ -163,7 +247,7 @@ def build_model(cfg: dict) -> nn.Module:
                 backbone,
                 pretrained=pretrained,
                 in_chans=in_chans,
-                num_classes=0 if conditioning == "film" else 2,
+                num_classes=0 if conditioning in ("film", "adversarial") else 2,
                 drop_path_rate=drop_path,
                 **extra_kwargs,
             )
@@ -181,6 +265,18 @@ def build_model(cfg: dict) -> nn.Module:
         return FiLMBackbone(
             base, feature_dim=feature_dim, num_classes=2, film_hidden=film_hidden
         )
+    elif conditioning == "adversarial":
+        feature_dim = _get_feature_dim(base, in_chans=in_chans)
+        film_hidden = int(model_cfg.get("film_hidden", 64))
+        adv_lambda = float(model_cfg.get("adv_lambda", 0.5))
+        return AdversarialBackbone(
+            base,
+            feature_dim=feature_dim,
+            num_classes=2,
+            num_az_classes=4,
+            adv_lambda=adv_lambda,
+            film_hidden=film_hidden,
+        )
 
     return base
 
@@ -190,20 +286,22 @@ def predict_proba(
 ) -> torch.Tensor:
     """Run model forward pass and return P(Rise) probability.
 
-    Handles both plain backbone (images only) and FiLMBackbone (images + az_sincos).
+    Handles plain backbone, FiLMBackbone, and AdversarialBackbone.
 
     Args:
         model:     nn.Module
         images:    [B, C, H, W] float tensor
-        az_sincos: [B, 2] float tensor (required for FiLMBackbone, ignored otherwise)
+        az_sincos: [B, 2] float tensor (required for FiLMBackbone/AdversarialBackbone)
 
     Returns:
         [B] float tensor of P(Rise) probabilities.
     """
-    if isinstance(model, FiLMBackbone):
+    if isinstance(model, (FiLMBackbone, AdversarialBackbone)):
         if az_sincos is None:
-            raise ValueError("FiLMBackbone requires az_sincos")
+            raise ValueError("Model requires az_sincos")
         logits = model(images, az_sincos)
     else:
         logits = model(images)
+    if isinstance(logits, tuple):
+        logits = logits[0]
     return torch.softmax(logits, dim=1)[:, 1]

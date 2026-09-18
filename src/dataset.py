@@ -196,7 +196,13 @@ class PareidoliaDataset(Dataset):
 
             delta = float(self.canonicalize_cfg["delta"])
             s = int(self.canonicalize_cfg["s"])
-            img = canonicalize(img, azimuth, delta, s)  # returns uint8 ndarray
+            jitter_std = float(self.canonicalize_cfg.get("jitter_deg", 0.0))
+            jitter = (
+                float(np.random.normal(0.0, jitter_std)) if jitter_std > 0.0 else 0.0
+            )
+            img = canonicalize(
+                img, azimuth, delta, s, jitter_deg=jitter
+            )  # returns uint8 ndarray
 
         # Step 2: Apply augmentation policy (Sample objects carry label)
         if self.augmentation_policy:

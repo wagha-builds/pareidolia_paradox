@@ -1,0 +1,47 @@
+# E10 — Canonical ConvNeXt-T + Adversarial Azimuth Head + Strong vflip (Levels 2 + 3a)
+# Parent: E5 / E9
+#
+# Hypothesis:
+#   82.5% of craters are concentrated in azimuth 270°-360°.
+#   Level 2: A Gradient Reversal Layer (GRL) between backbone features and a 4-way
+#   azimuth quadrant classifier forces the backbone to learn representations that
+#   are invariant to the illumination quadrant, penalizing reliance on the azimuth shortcut.
+#   Level 3a: p_vflip=0.50 creates synthetic craters/mounds under inverted lighting.
+
+experiment:
+  name: "e10_adversarial"
+  seed: 42
+
+data:
+  canonicalize: true
+
+model:
+  backbone: "convnext_tiny.fb_in22k_ft_in1k"
+  in_chans: 1
+  pretrained: true
+  conditioning: "adversarial"
+  adv_lambda: 0.5
+  film_hidden: 64
+  drop_path_rate: 0.1
+
+augmentation:
+  p_vflip: 0.50
+  p_neg: 0.15
+  p_hflip: 0.50
+  canonicalize_jitter_deg: 5.0
+  brightness: 0.04
+  contrast: 0.08
+  noise_std: 0.01
+
+training:
+  adv_weight: 0.2
+  epochs: 30
+  batch_size: 32
+  learning_rate: 5.0e-5
+  weight_decay: 0.05
+  label_smoothing: 0.05
+  mixed_precision: "bf16"
+  early_stopping_patience: 5
+  warmup_epochs: 3
+  num_workers: 0
+  n_folds: 5

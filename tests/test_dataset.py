@@ -116,3 +116,29 @@ def test_dataset_augmentation_policy(tmp_path: Path):
     assert int(label) == 1
     # Pixel value was negated: 255 - 50 = 205 (normalized by /255.0 = 205/255)
     np.testing.assert_allclose(float(img_tensor[0, 0, 0]), 205.0 / 255.0, atol=1e-3)
+
+
+def test_dataset_canonicalize_with_jitter(tmp_path: Path):
+    """Dataset with jitter_deg produces valid float tensor with proper dimensions."""
+    raw = tmp_path / "raw"
+    (raw / "train_images").mkdir(parents=True)
+    (raw / "eval_images").mkdir(parents=True)
+    pd.DataFrame(
+        {"image_id": ["train_1.png"], "sun_azimuth_angle": [45.0], "label": [0]}
+    ).to_csv(raw / "train_metadata.csv", index=False)
+    pd.DataFrame({"image_id": ["eval_1.png"], "sun_azimuth_angle": [0.0]}).to_csv(
+        raw / "test_metadata.csv", index=False
+    )
+    _write_png(raw / "train_images" / "train_1.png", 100)
+    _write_png(raw / "eval_images" / "eval_1.png", 0)
+    build_cache(tmp_path)
+
+    img_tensor, az_sincos, label, img_id = PareidoliaDataset(
+        tmp_path,
+        "train",
+        canonicalize_cfg={"delta": 46.7, "s": -1, "jitter_deg": 10.0},
+    )[0]
+    assert img_tensor.shape == (1, 256, 256)
+    assert az_sincos.shape == (2,)
+    assert int(label) == 0
+    assert img_id == "train_1.png"
