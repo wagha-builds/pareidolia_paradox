@@ -1,0 +1,58 @@
+# E13 — Rotation-jitter + upsampled Az-0-90 craters
+# Parent: E5 (e5_convnext_film.yaml)
+# Change: canonicalize_jitter_deg=15 (vs 0 in E5) + class-weighted loss
+#         to force model to be rotation-invariant at Fold 3's problem quadrant
+#
+# Problem diagnosis (2026-09-18):
+#   Fold 3 BA = 0.59 because Az 0-90 quadrant has only 69 Depth in training
+#   (ratio 0.11 Depth:Rise). Model learns "Az 0-90 = predict Rise" as shortcut.
+#   Fold 3 validation has 96 Depth in Az 0-90 → model fails catastrophically.
+#
+# Fix strategy:
+#   canonicalize_jitter_deg=15 adds random ±15° rotation noise during training.
+#   This forces the model to classify images that ALMOST match canonical (sun@90°),
+#   making it less sensitive to exact azimuth placement and more reliant on
+#   actual morphology features (rim shape, shadow direction relative to image center).
+#
+#   Stronger p_neg=0.25 adds polarity-flip augmentation, which is label-preserving
+#   and breaks shadow-direction shortcuts.
+#
+# Expected gain: +1–2 BA points on Fold 3; may slightly hurt Folds 0/1/4 that
+#   currently benefit from the azimuth shortcut.
+# Decision rule: adopt if mean 5-fold BA beats E5-s42 (0.7271) by >0.5 pt.
+
+experiment:
+  name: "e13_jitter_strong"
+  seed: 42
+
+data:
+  canonicalize: true
+  canonicalize_jitter_deg: 15.0    # ±15° rotation noise during training
+
+model:
+  backbone: "convnext_tiny.fb_in22k_ft_in1k"
+  in_chans: 1
+  pretrained: true
+  conditioning: "film"
+  drop_path_rate: 0.1
+  film_hidden: 64
+
+augmentation:
+  p_vflip: 0.25
+  p_neg: 0.25        # stronger polarity flip (was 0.15 in E5)
+  p_hflip: 0.50
+  brightness: 0.04
+  contrast: 0.08
+  noise_std: 0.01
+
+training:
+  epochs: 30
+  batch_size: 32
+  learning_rate: 5.0e-5
+  weight_decay: 0.05
+  label_smoothing: 0.05
+  mixed_precision: "bf16"
+  early_stopping_patience: 5
+  warmup_epochs: 3
+  num_workers: 0
+  n_folds: 5
