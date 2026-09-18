@@ -10,7 +10,7 @@ import pandas as pd
 import torch
 from omegaconf import OmegaConf
 from sklearn.metrics import balanced_accuracy_score, roc_auc_score
-from torch.utils.data import DataLoader
+from torch.utils.data import ConcatDataset, DataLoader
 
 from .dataset import PareidoliaDataset
 from .losses import build_loss
@@ -66,12 +66,22 @@ def _train_one_fold(
     # Build canonicalize_cfg from frozen config if canonicalize=true
     # frozen.calibration.{delta,s} as laid out in configs/config.yaml
     canonicalize_cfg = None
+    train_canonicalize_cfg = None
     if bool(cfg.data.get("canonicalize", False)):
         frozen = cfg_dict.get("frozen", {})
         cal = frozen.get("calibration", frozen)  # fallback to frozen itself if flat
         canonicalize_cfg = {
             "delta": float(cal["delta"]),
             "s": int(cal["s"]),
+            "jitter_deg": 0.0,
+        }
+        jitter_std = float(
+            cfg_dict.get("augmentation", {}).get("canonicalize_jitter_deg", 0.0)
+        )
+        train_canonicalize_cfg = {
+            "delta": float(cal["delta"]),
+            "s": int(cal["s"]),
+            "jitter_deg": jitter_std,
         }
 
     train_policy = build_augmentation_policy(cfg_dict, training=True)
@@ -82,7 +92,7 @@ def _train_one_fold(
         "train",
         indices=train_idx,
         transform=build_transform(cfg_dict, training=True),
-        canonicalize_cfg=canonicalize_cfg,
+        canonicalize_cfg=train_canonicalize_cfg,
         augmentation_policy=train_policy,
     )
     val_ds = PareidoliaDataset(
@@ -93,21 +103,42 @@ def _train_one_fold(
         canonicalize_cfg=canonicalize_cfg,
         augmentation_policy=val_policy,
     )
+
+    # Optional: append pseudo-labeled test images to training set
+    pseudo_csv = str(cfg_dict.get("training", {}).get("pseudo_label_csv", "") or "")
+    if pseudo_csv:
+        from .pseudo_dataset import PseudoDataset
+
+        pseudo_ds = PseudoDataset(
+            "data",
+            pseudo_label_csv=pseudo_csv,
+            transform=build_transform(cfg_dict, training=True),
+            canonicalize_cfg=train_canonicalize_cfg,
+            augmentation_policy=train_policy,
+        )
+        logging.info(
+            "fold=%s pseudo-labels: %d images added from %s", fold, len(pseudo_ds), pseudo_csv
+        )
+        train_ds = ConcatDataset([train_ds, pseudo_ds])
     sampler = None
     if bool(cfg.training.get("azimuth_balanced_sampler", False)):
-        az_angles = train_ds.metadata.iloc[train_idx]["sun_azimuth_angle"].values
-        train_labels = labels[train_idx]
-        az_bins = np.digitize(az_angles, bins=[0.0, 90.0, 180.0, 270.0, 360.0]) - 1
-        az_bins = np.clip(az_bins, 0, 3)
-        cell_counts = {}
-        for b, y in zip(az_bins, train_labels):
-            cell_counts[(b, y)] = cell_counts.get((b, y), 0) + 1
-        sample_weights = [
-            1.0 / cell_counts[(b, y)] for b, y in zip(az_bins, train_labels)
-        ]
-        sampler = torch.utils.data.WeightedRandomSampler(
-            weights=sample_weights, num_samples=len(sample_weights), replacement=True
-        )
+        # Azimuth-balanced sampler only works on plain PareidoliaDataset (not ConcatDataset)
+        if hasattr(train_ds, "metadata"):
+            az_angles = train_ds.metadata.iloc[train_idx]["sun_azimuth_angle"].values
+            train_labels = labels[train_idx]
+            az_bins = np.digitize(az_angles, bins=[0.0, 90.0, 180.0, 270.0, 360.0]) - 1
+            az_bins = np.clip(az_bins, 0, 3)
+            cell_counts = {}
+            for b, y in zip(az_bins, train_labels):
+                cell_counts[(b, y)] = cell_counts.get((b, y), 0) + 1
+            sample_weights = [
+                1.0 / cell_counts[(b, y)] for b, y in zip(az_bins, train_labels)
+            ]
+            sampler = torch.utils.data.WeightedRandomSampler(
+                weights=sample_weights, num_samples=len(sample_weights), replacement=True
+            )
+        else:
+            logging.warning("azimuth_balanced_sampler disabled when pseudo-labels active (ConcatDataset)")
 
     train_loader = DataLoader(
         train_ds,
@@ -184,13 +215,25 @@ def _train_one_fold(
             with torch.autocast(
                 device_type=device.type, dtype=amp_dtype, enabled=amp_enabled
             ):
-                from .models import FiLMBackbone
+                from .models import AdversarialBackbone, FiLMBackbone
 
-                if isinstance(model, FiLMBackbone):
+                if isinstance(model, AdversarialBackbone):
+                    logits, az_logits = model(images, az_sincos, return_az_logits=True)
+                    loss = criterion(logits, y)
+                    sin_a, cos_a = az_sincos[:, 0], az_sincos[:, 1]
+                    az_deg = (
+                        torch.atan2(sin_a, cos_a) * (180.0 / 3.141592653589793)
+                    ) % 360.0
+                    quadrant = (az_deg // 90.0).long().clamp(0, 3)
+                    az_loss = torch.nn.functional.cross_entropy(az_logits, quadrant)
+                    adv_weight = float(cfg.training.get("adv_weight", 0.2))
+                    loss = loss + adv_weight * az_loss
+                elif isinstance(model, FiLMBackbone):
                     logits = model(images, az_sincos)
+                    loss = criterion(logits, y)
                 else:
                     logits = model(images)
-                loss = criterion(logits, y)
+                    loss = criterion(logits, y)
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
