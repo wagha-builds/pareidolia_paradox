@@ -306,11 +306,11 @@ confound entirely — in canonical frame, crater always has bright-top, mound al
 ## M6 — Final Submission
 
 ### OPS tasks
-- [ ] Confirm `make reproduce` OOF BA within 0.2 pt
-- [ ] Final inference with TTA → `test_probs_<timestamp>.npy`
-- [ ] `make submit` → validate → inversion check → sanity report
-- [ ] Spot-check grid (20 predicted-Depth + 20 predicted-Rise)
-- [ ] Update `PROGRESS.md` M6 entry
+- [x] Confirm `make reproduce` OOF BA within 0.2 pt (diff = 0.000000)
+- [x] Final inference with TTA → `test_probs_<timestamp>.npy`
+- [x] `make submit` → validate → inversion check → sanity report
+- [x] Spot-check grid (20 predicted-Depth + 20 predicted-Rise)
+- [x] Update `PROGRESS.md` M6 entry
 
 ### Manual actions
 - [ ] MANUAL: Review spot-check grid

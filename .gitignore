@@ -14,3 +14,4 @@ submissions/*
 !submissions/.gitkeep
 scratch/
 reports/figures/gradcam_*.png
+reports/spot_check_*.png

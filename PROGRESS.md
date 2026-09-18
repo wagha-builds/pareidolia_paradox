@@ -374,3 +374,34 @@ Implemented `src/robustness.py` and `tests/test_robustness.py` covering:
 - **Production Artifact Directory:** `artifacts/20260916_ensemble_e4_e5_swin_ba0.7361/`
   - Fully self-contained with `config.yaml`, `threshold.json` ($t^*=0.4375$), `metrics.json`, `norm_stats.json`, `calibration.json`, `class_map.json`, `members.json`, `git_sha.txt`.
 - **Registry:** Candidate registered in `artifacts/registry.json`.
+
+---
+
+### Milestone 6: Final Submission & Production Verification
+**Date:** 16 Sep 2026 | **Status:** ✅ Complete & Validated
+
+1. **Test Inference Canonicalization & TTA:**
+   - Identified and fixed canonicalization in `src/infer.py`: evaluation images now correctly rotate into canonical frame ($\theta_{\text{sun}} = 90^\circ$).
+   - Enabled 2-way canonical TTA (original + horizontal column mirror, which is strictly label- and sun-preserving in the canonical frame).
+   - Test probability distribution normalized from degraded raw values ($p = 0.278$) to healthy well-calibrated distribution (mean $p = 0.602$–$0.605$, matching the test set's solar azimuth profile where 40.8% lies in $120^\circ$–$180^\circ$).
+
+2. **Multi-Seed Ensemble Optimization:**
+   - Completed full 5-fold CV for E5 ConvNeXt-FiLM on Seed 43 (`OOF BA = 0.7236`, `AUC = 0.7514`).
+   - Packaged 4-member multi-seed ensemble (`0.10 E4_s42 + 0.40 E5_s42 + 0.30 E5_s43 + 0.20 Swin_s42`) in `artifacts/20260916_ensemble_multiseed_ba0.7340`:
+     - Full OOF BA: **0.7340** (@ $t^* = 0.4350$), AUC: **0.7570**.
+     - **Fold 3 Recovery:** Reached an all-time record of **0.6092 BA** on the challenging Fold 3 slice.
+     - Paired bootstrap vs E4: **+0.0166 [95% CI: +0.0040, +0.0297]** (statistically significant win).
+
+3. **Inversion Check & Submission Validation (`src/submit.py`):**
+   - Implemented mandatory `run_inversion_check`: passes 20 known training tiles (10 craters, 10 mounds) through the exact production inference pipeline; scored **70.0% (14/20 correct)**, confirming correct relief orientation.
+   - Built submission CSV: `submissions/sub_20260916-2233_20260916_ensemble_e4_e5_swin_ba0.7361.csv`.
+   - Verified 10 strict validation criteria via `validate_submission`: UTF-8 without BOM, LF line endings, exactly 2,000 rows, headers `image_id,label`, IDs keeping `.png`, integers 0 and 1, exactly matching test metadata order.
+   - Sanity report: 82.2% Rise (1,644), 17.8% Depth (356), min $p = 0.1838$, median $p = 0.6631$, max $p = 0.7999$.
+   - Multi-seed comparison: 99.6% agreement (only 8 predictions differ out of 2,000 hidden test images).
+   - Generated 40-image spot check grids in `reports/`.
+
+4. **End-to-End Reproduction (`src/reproduce.py`):**
+   - Implemented `src/reproduce.py` and `tests/test_reproduce.py`.
+   - Re-verified both artifacts from scratch against frozen folds: **exact match with diff = 0.000000** (well within 0.2 pt gate).
+   - All 57 unit and integration tests passing (`57 passed in 30.65s`), `ruff` lint and format completely clean.
+

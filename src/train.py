@@ -102,7 +102,9 @@ def _train_one_fold(
         cell_counts = {}
         for b, y in zip(az_bins, train_labels):
             cell_counts[(b, y)] = cell_counts.get((b, y), 0) + 1
-        sample_weights = [1.0 / cell_counts[(b, y)] for b, y in zip(az_bins, train_labels)]
+        sample_weights = [
+            1.0 / cell_counts[(b, y)] for b, y in zip(az_bins, train_labels)
+        ]
         sampler = torch.utils.data.WeightedRandomSampler(
             weights=sample_weights, num_samples=len(sample_weights), replacement=True
         )
@@ -343,12 +345,16 @@ def main():
     parser.add_argument("--config", type=str, default="configs/debug.yaml")
     parser.add_argument("--fast", action="store_true")
     parser.add_argument("--seeds", type=str, default="")
-    parser.add_argument("--fold", type=int, default=None, help="Train specific fold only")
+    parser.add_argument(
+        "--fold", type=int, default=None, help="Train specific fold only"
+    )
     args = parser.parse_args()
 
     seeds = [int(s) for s in args.seeds.split() if s.strip()] or [None]
     for seed in seeds:
-        train_cv(args.config, fast=args.fast, seed_override=seed, fold_override=args.fold)
+        train_cv(
+            args.config, fast=args.fast, seed_override=seed, fold_override=args.fold
+        )
 
 
 if __name__ == "__main__":

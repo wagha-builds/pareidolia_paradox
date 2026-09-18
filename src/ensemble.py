@@ -237,7 +237,31 @@ def package_artifact(
         json.dumps(spec.get("members", []), indent=2), encoding="utf-8"
     )
 
-    # 9. Update artifacts/registry.json candidates
+    # 9. Run manifest
+    manifest = {
+        "run_id": spec.get("name", "ensemble"),
+        "git_sha": get_git_sha(),
+        "folds_sha256": str(
+            getattr(base_cfg.get("frozen", {}), "folds_sha256", None)
+            or (
+                base_cfg.get("frozen", {}).get("folds_sha256", "unknown")
+                if isinstance(base_cfg.get("frozen", {}), dict)
+                else "unknown"
+            )
+        ),
+        "metrics": {
+            "oof_ba": eval_results["oof_ba"],
+            "oof_auc": eval_results["oof_auc"],
+            "threshold": eval_results["threshold"],
+            "per_fold_ba": eval_results["per_fold_ba"],
+        },
+        "members": spec.get("members", []),
+    }
+    (artifact_dir / "run_manifest.json").write_text(
+        json.dumps(manifest, indent=2), encoding="utf-8"
+    )
+
+    # 10. Update artifacts/registry.json candidates
     reg_path = Path("artifacts/registry.json")
     if reg_path.exists():
         reg = json.loads(reg_path.read_text(encoding="utf-8"))
@@ -355,7 +379,9 @@ def predict_ensemble(
     image_ids = None
     for m in members:
         run_id = m["run_id"]
-        run_dir = Path("experiments") / run_id if not Path(run_id).exists() else Path(run_id)
+        run_dir = (
+            Path("experiments") / run_id if not Path(run_id).exists() else Path(run_id)
+        )
         df_pred = predict_run(run_dir, split=split, tta=tta)
         member_probs.append(df_pred["p_rise"].to_numpy())
         if image_ids is None:
@@ -368,7 +394,9 @@ def predict_ensemble(
     out_dir = Path(spec.get("output", {}).get("dir", "experiments/ensemble"))
     out_dir.mkdir(parents=True, exist_ok=True)
     tag = "tta" if tta else "raw"
-    pred_path = out_dir / f"test_probs_{tag}_{pd.Timestamp.now().strftime('%Y%m%d-%H%M%S')}.npy"
+    pred_path = (
+        out_dir / f"test_probs_{tag}_{pd.Timestamp.now().strftime('%Y%m%d-%H%M%S')}.npy"
+    )
     np.save(pred_path, p_ens)
     out_df.to_csv(out_dir / "test_predictions.csv", index=False)
     print(f"Ensemble test predictions written to {out_dir / 'test_predictions.csv'}")
