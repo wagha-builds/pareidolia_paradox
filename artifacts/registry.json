@@ -2,6 +2,7 @@
   "production": "artifacts/20260916_ensemble_e4_e5_swin_ba0.7361",
   "candidates": [
     "artifacts/20260916_ensemble_e4_e5_swin_ba0.7361",
-    "artifacts/20260916_ensemble_multiseed_ba0.7340"
+    "artifacts/20260916_ensemble_multiseed_ba0.7340",
+    "artifacts/20260916_ensemble_option_c_ba0.7371"
   ]
 }
