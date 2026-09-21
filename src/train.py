@@ -302,6 +302,7 @@ def train_cv(
     fast: bool = False,
     seed_override: int | None = None,
     fold_override: int | None = None,
+    folds_to_run: list[int] | None = None,
 ) -> Path:
     cfg = _load_config(config_path)
     seed = int(seed_override if seed_override is not None else cfg.experiment.seed)
@@ -328,7 +329,9 @@ def train_cv(
     run_dir.mkdir(parents=True, exist_ok=False)
     OmegaConf.save(cfg, run_dir / "config.yaml")
 
-    if fold_override is not None:
+    if folds_to_run is not None:
+        fold_ids = [int(f) for f in folds_to_run]
+    elif fold_override is not None:
         fold_ids = [int(fold_override)]
     elif "fold" in cfg.training:
         fold_ids = [int(cfg.training.fold)]
@@ -391,12 +394,21 @@ def main():
     parser.add_argument(
         "--fold", type=int, default=None, help="Train specific fold only"
     )
+    parser.add_argument(
+        "--folds", type=str, default="",
+        help="Space-separated list of fold IDs to run (e.g. '2 3 4')"
+    )
     args = parser.parse_args()
 
     seeds = [int(s) for s in args.seeds.split() if s.strip()] or [None]
+    folds_to_run = [int(f) for f in args.folds.split() if f.strip()] if args.folds else None
     for seed in seeds:
         train_cv(
-            args.config, fast=args.fast, seed_override=seed, fold_override=args.fold
+            args.config,
+            fast=args.fast,
+            seed_override=seed,
+            fold_override=args.fold,
+            folds_to_run=folds_to_run,
         )
 
 

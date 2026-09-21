@@ -13,7 +13,7 @@ Where things live:
 
 ## 1. The project in one paragraph
 
-We classify 256×256 grayscale lunar tiles as **Depth (0)** or **Rise (1)** for the Pareidolia Paradox competition, scored by Balanced Accuracy on 2,000 hidden-label images, with a hard internal stop of Mon 21 Sep 2026, 18:00 local. We also ship a small demo app. The pipeline: calibrate the azimuth convention → rotate every image so the sun is at the top → train a CNN ensemble with physics-valid augmentations on frozen group-aware folds → pick the BA threshold on out-of-fold predictions → build a validated CSV.
+We classify 256×256 grayscale lunar tiles as **Depth (0)** or **Rise (1)** for the Pareidolia Paradox competition, scored by Balanced Accuracy on 2,000 hidden-label images, with a hard internal stop of Mon 21 Sep 2026, 23:59 IST (deadline extended). We also ship a small demo app. The pipeline: calibrate the azimuth convention → rotate every image so the sun is at the top → train a CNN ensemble with physics-valid augmentations on frozen group-aware folds → pick the BA threshold on out-of-fold predictions → build a validated CSV.
 
 ## 2. The fact that overrides your defaults
 
@@ -235,7 +235,7 @@ These tests are mandatory, because a silent error in any of them costs the compe
 - A new submission disagrees with the previous best on more than about 15% of rows, or its predicted class balance looks implausible.
 - An export's parity check fails.
 - Anything would involve uploading, emailing organizers, external data, or training on test images (rules questions Q2 and Q3).
-- It is after Fri 18 Sep 18:00 (model-code freeze) and the change touches model code.
+- It is after Mon 21 Sep 18:00 (model-code freeze) and the change touches model code.
 
 ## 12. Tool-specific notes
 

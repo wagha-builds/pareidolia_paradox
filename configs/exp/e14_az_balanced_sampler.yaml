@@ -1,0 +1,54 @@
+# E14 — Azimuth-Balanced Sampler on E5
+# Parent: E5 (e5_convnext_film.yaml)
+# Change: training.azimuth_balanced_sampler=true
+#
+# Hypothesis:
+#   The class-weighted CrossEntropyLoss in losses.py corrects for global
+#   63.7% Rise / 36.3% Depth imbalance, but does NOT correct for the joint
+#   (azimuth_quadrant, class) imbalance:
+#     Q1–Q3: 88% Rise  → model over-trained on easy Rise images
+#     Q4:    65% Depth → model under-trained on Q4 Depth (our worst quadrant)
+#   The azimuth_balanced_sampler (already coded in train.py L124–141) weights
+#   each (az_bin, label) cell inversely by its count within the fold's training
+#   split, so every cell is seen equally often during training.
+#
+# Risk: If Q4→Depth is real ground truth (not acquisition bias), correcting
+#       for it may hurt Q4 Depth precision. Fast screen first to check.
+#
+# Decision rule: adopt if fold-0 screen beats E5-s42 (0.7737) by >0.5 pt.
+
+experiment:
+  name: "e14_az_balanced_sampler"
+  seed: 42
+
+data:
+  canonicalize: true
+
+model:
+  backbone: "convnext_tiny.fb_in22k_ft_in1k"
+  in_chans: 1
+  pretrained: true
+  conditioning: "film"
+  drop_path_rate: 0.1
+  film_hidden: 64
+
+augmentation:
+  p_vflip: 0.25
+  p_neg: 0.15
+  p_hflip: 0.50
+  brightness: 0.04
+  contrast: 0.08
+  noise_std: 0.01
+
+training:
+  epochs: 30
+  batch_size: 32
+  learning_rate: 5.0e-5
+  weight_decay: 0.05
+  label_smoothing: 0.05
+  mixed_precision: "bf16"
+  early_stopping_patience: 5
+  warmup_epochs: 3
+  num_workers: 0
+  n_folds: 5
+  azimuth_balanced_sampler: true   # KEY CHANGE vs E5

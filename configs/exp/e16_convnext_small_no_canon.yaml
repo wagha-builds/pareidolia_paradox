@@ -1,0 +1,46 @@
+# E16 — ConvNeXt-Small + No Canonicalization + FiLM: larger backbone capacity without rotation noise
+# Parent: E12 (e12_convnext_small.yaml) & E15 (e15_no_canon_film.yaml)
+# Change: backbone convnext_small with data.canonicalize=false
+#
+# Hypothesis:
+#   E15 demonstrated that removing the noisy canonical rotation (R=0.176)
+#   boosted ConvNeXt-Tiny from 0.7271 to 0.7441 OOF BA (+1.7 points).
+#   ConvNeXt-Small has higher model capacity (~50M params) to model subtle
+#   lunar surface relief cues and illumination gradients directly.
+#   Without canonical rotation noise, ConvNeXt-Small should achieve even higher
+#   discriminative power when conditioned via FiLM on (sin az, cos az).
+
+experiment:
+  name: "e16_convnext_small_no_canon"
+  seed: 42
+
+data:
+  canonicalize: false          # KEY CHANGE vs E12: no noisy canonical rotation
+
+model:
+  backbone: "convnext_small.fb_in22k_ft_in1k"
+  in_chans: 1
+  pretrained: true
+  conditioning: "film"
+  drop_path_rate: 0.2        # regularisation for larger model
+  film_hidden: 64
+
+augmentation:
+  p_vflip: 0.25
+  p_neg: 0.15
+  p_hflip: 0.50
+  brightness: 0.04
+  contrast: 0.08
+  noise_std: 0.01
+
+training:
+  epochs: 30
+  batch_size: 16             # fits comfortably in GPU memory with bf16
+  learning_rate: 3.0e-5     # stable LR for ConvNeXt-Small
+  weight_decay: 0.05
+  label_smoothing: 0.05
+  mixed_precision: "bf16"
+  early_stopping_patience: 5
+  warmup_epochs: 3
+  num_workers: 0
+  n_folds: 5

@@ -15,7 +15,74 @@ Usage in configs:
 """
 
 import torch
+import torch.nn.functional as F
 from torch import nn
+
+# ─── Physics Tensor ────────────────────────────────────────────────────────────
+# Pre-computed Sobel kernels (registered as buffers, not parameters).
+# Normalised by 4 so outputs live in roughly the same range as the input pixel.
+_SOBEL_Y = torch.tensor(
+    [[-1.0, -2.0, -1.0], [0.0, 0.0, 0.0], [1.0, 2.0, 1.0]], dtype=torch.float32
+).view(1, 1, 3, 3) / 4.0  # shape: (1,1,3,3)
+
+_SOBEL_X = torch.tensor(
+    [[-1.0, 0.0, 1.0], [-2.0, 0.0, 2.0], [-1.0, 0.0, 1.0]], dtype=torch.float32
+).view(1, 1, 3, 3) / 4.0  # shape: (1,1,3,3)
+
+
+def build_physics_tensor(gray: torch.Tensor) -> torch.Tensor:
+    """Convert 1-channel grayscale to 3-channel physics tensor on-GPU.
+
+    Physics encoding:
+      Ch0 : original grayscale I(x,y)      — luminosity
+      Ch1 : vertical Sobel   dI/dy         — shadow slope along solar vector
+      Ch2 : horizontal Sobel dI/dx         — rim curvature / bilateral symmetry
+
+    Args:
+        gray: [B, 1, H, W] float32 tensor (normalised, typically in [-1, 1]).
+
+    Returns:
+        [B, 3, H, W] float32 tensor.
+    """
+    dev = gray.device
+    ky = _SOBEL_Y.to(dev)
+    kx = _SOBEL_X.to(dev)
+    gy = F.conv2d(gray, ky, padding=1)   # shadow slope
+    gx = F.conv2d(gray, kx, padding=1)   # rim curvature
+    return torch.cat([gray, gy, gx], dim=1)  # [B, 3, H, W]
+
+
+class PhysicsTensorWrapper(nn.Module):
+    """Wrap a 3-channel backbone so it accepts 1-ch grayscale at the interface.
+
+    At forward time the 1→3 channel expansion is done on-GPU via
+    ``build_physics_tensor``.  The wrapped backbone itself is responsible
+    for all its own parameters; this module adds zero parameters.
+
+    This is purely an input-channel adapter and does NOT replace
+    ``FiLMBackbone`` — it is composed with it.  Typical usage::
+
+        base_3ch = PhysicsTensorWrapper(timm_backbone)
+        model    = FiLMBackbone(base_3ch, feature_dim, ...)
+
+    Args:
+        backbone: any nn.Module whose first conv expects 3-channel RGB input.
+    """
+
+    def __init__(self, backbone: nn.Module) -> None:
+        super().__init__()
+        self.backbone = backbone
+
+    def forward_features(self, x: torch.Tensor) -> torch.Tensor:
+        """Convert 1-ch → 3-ch physics tensor, then run backbone feature extractor."""
+        x3 = build_physics_tensor(x)  # [B, 1, H, W] → [B, 3, H, W]
+        if hasattr(self.backbone, "forward_features"):
+            return self.backbone.forward_features(x3)
+        return self.backbone(x3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x3 = build_physics_tensor(x)
+        return self.backbone(x3)
 
 
 class SmallCNN(nn.Module):
@@ -224,11 +291,15 @@ def build_model(cfg: dict) -> nn.Module:
         cfg: full config dict (OmegaConf-resolved to plain dict).
 
     Returns:
-        nn.Module — either a plain backbone, FiLMBackbone, or AdversarialBackbone wrapper.
+        nn.Module — either a plain backbone, FiLMBackbone, or AdversarialBackbone
+        wrapper, optionally behind a PhysicsTensorWrapper for 3-ch Sobel input.
     """
     model_cfg = cfg.get("model", {})
-    backbone = str(model_cfg.get("backbone", "small_cnn"))
-    in_chans = int(model_cfg.get("in_chans", 1))
+    backbone_name = str(model_cfg.get("backbone", "small_cnn"))
+    # physics_tensor: true → wrapper converts 1-ch input to 3-ch (I, dI/dy, dI/dx)
+    # The backbone is always created with in_chans=3 when physics_tensor is set.
+    use_physics_tensor = bool(model_cfg.get("physics_tensor", False))
+    in_chans = 3 if use_physics_tensor else int(model_cfg.get("in_chans", 1))
     pretrained = bool(model_cfg.get("pretrained", False))
     drop_path = float(model_cfg.get("drop_path_rate", 0.0))
     conditioning = str(model_cfg.get("conditioning", "none")).lower()
@@ -237,14 +308,14 @@ def build_model(cfg: dict) -> nn.Module:
     if "img_size" in model_cfg:
         extra_kwargs["img_size"] = int(model_cfg["img_size"])
 
-    if backbone == "small_cnn":
+    if backbone_name == "small_cnn":
         base = SmallCNN(in_chans=in_chans)
     else:
         try:
             import timm
 
             base = timm.create_model(
-                backbone,
+                backbone_name,
                 pretrained=pretrained,
                 in_chans=in_chans,
                 num_classes=0 if conditioning in ("film", "adversarial") else 2,
@@ -255,18 +326,27 @@ def build_model(cfg: dict) -> nn.Module:
             if pretrained:
                 raise
             print(
-                f"Falling back to SmallCNN because timm model {backbone!r} failed: {exc}"
+                f"Falling back to SmallCNN because timm model {backbone_name!r} failed: {exc}"
             )
             base = SmallCNN(in_chans=in_chans)
 
+    # Wrap with physics-tensor adapter so the public interface always takes 1-ch.
+    # The wrapper converts 1-ch → 3-ch internally on GPU, then calls the backbone.
+    if use_physics_tensor:
+        base = PhysicsTensorWrapper(base)
+        # After wrapping, feature dim is probed using 1-ch dummy (wrapper handles the rest).
+        _probe_chans = 1
+    else:
+        _probe_chans = in_chans
+
     if conditioning == "film":
-        feature_dim = _get_feature_dim(base, in_chans=in_chans)
+        feature_dim = _get_feature_dim(base, in_chans=_probe_chans)
         film_hidden = int(model_cfg.get("film_hidden", 64))
         return FiLMBackbone(
             base, feature_dim=feature_dim, num_classes=2, film_hidden=film_hidden
         )
     elif conditioning == "adversarial":
-        feature_dim = _get_feature_dim(base, in_chans=in_chans)
+        feature_dim = _get_feature_dim(base, in_chans=_probe_chans)
         film_hidden = int(model_cfg.get("film_hidden", 64))
         adv_lambda = float(model_cfg.get("adv_lambda", 0.5))
         return AdversarialBackbone(

@@ -1,0 +1,61 @@
+# E18 — 3-Channel Physics Tensor + No Canonicalization + FiLM
+# Parent: E17 (e17_pseudo_no_canon.yaml)
+# Change: model.physics_tensor=true  (adds Sobel-Y and Sobel-X as Ch1/Ch2)
+#
+# Hypothesis:
+#   Competitor (manasgharat1) got +15.88pp from the 3-ch physics tensor alone.
+#   In their setup it was the dominant innovation.  Here we test it on top of
+#   our best no-canon FiLM pipeline (E17, OOF BA 0.7515).
+#
+#   Physics encoding:
+#     Ch0: grayscale I(x,y)   — luminosity  (same as before)
+#     Ch1: vertical Sobel     — shadow slope along the solar vector (top→bottom)
+#     Ch2: horizontal Sobel   — rim curvature / bilateral symmetry
+#
+#   The Sobel channels make shadow polarity explicit, reducing the amount the
+#   CNN must learn from scratch.  The backbone is initialized with pretrained
+#   RGB weights (3-ch), which already encode gradient sensitivity.
+#
+#   Expected gain over E17: +2–5pp OOF BA (conservatively).
+#   Decision rule: adopt if OOF BA > E17 (0.7515) by > 0.5 pt.
+#
+# Key implementation note:
+#   model.physics_tensor: true      → PhysicsTensorWrapper around backbone
+#   model.in_chans is NOT set here  → build_model sets it to 3 automatically
+#   The public interface still takes 1-ch images (wrapper handles conversion)
+
+experiment:
+  name: "e18_physics_tensor_no_canon"
+  seed: 42
+
+data:
+  canonicalize: false          # No-canon — same as E15, E17
+
+model:
+  backbone: "convnext_tiny.fb_in22k_ft_in1k"
+  physics_tensor: true         # KEY CHANGE: 1-ch → 3-ch Sobel on GPU
+  pretrained: true
+  conditioning: "film"
+  drop_path_rate: 0.1
+  film_hidden: 64
+
+augmentation:
+  p_vflip: 0.25
+  p_neg: 0.15
+  p_hflip: 0.50
+  brightness: 0.04
+  contrast: 0.08
+  noise_std: 0.01
+
+training:
+  epochs: 30
+  batch_size: 32
+  learning_rate: 5.0e-5
+  weight_decay: 0.05
+  label_smoothing: 0.05
+  mixed_precision: "bf16"
+  early_stopping_patience: 5
+  warmup_epochs: 3
+  num_workers: 0
+  n_folds: 5
+  pseudo_label_csv: "data/pseudo_labels.csv"

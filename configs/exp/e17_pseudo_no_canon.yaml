@@ -1,0 +1,50 @@
+# E17 — Pseudo-labeling + No Canonicalization + FiLM
+# Parent: E11 (e11_pseudo_label.yaml)
+# Change: data.canonicalize=false (same as E15 vs E5)
+#
+# Hypothesis:
+#   E15 showed +1.7pp over E5 by removing the noisy canonical rotation (R=0.176).
+#   E11 adds pseudo-labels (808 high-confidence test images) over E5.
+#   E17 combines both improvements: pseudo-labels AND no canonicalization.
+#   Expected gain over E11: ~+1.5–2pp (same mechanism as E15>E5 and E16>E12).
+#   If E17 ~ 0.74–0.76, it becomes the strongest canonical-family member and
+#   adds further diversity to the no-canon group in the final ensemble.
+#
+# Decision rule: adopt if OOF BA > E11-s42 (0.7278) by > 0.5 pt.
+# Parent runs: E11 (0.7278 OOF) and E15-s42 (0.7441 OOF)
+
+experiment:
+  name: "e17_pseudo_no_canon"
+  seed: 42
+
+data:
+  canonicalize: false          # KEY CHANGE vs E11
+
+model:
+  backbone: "convnext_tiny.fb_in22k_ft_in1k"
+  in_chans: 1
+  pretrained: true
+  conditioning: "film"
+  drop_path_rate: 0.1
+  film_hidden: 64
+
+augmentation:
+  p_vflip: 0.25
+  p_neg: 0.15
+  p_hflip: 0.50
+  brightness: 0.04
+  contrast: 0.08
+  noise_std: 0.01
+
+training:
+  epochs: 30
+  batch_size: 32
+  learning_rate: 5.0e-5
+  weight_decay: 0.05
+  label_smoothing: 0.05
+  mixed_precision: "bf16"
+  early_stopping_patience: 5
+  warmup_epochs: 3
+  num_workers: 0
+  n_folds: 5
+  pseudo_label_csv: "data/pseudo_labels.csv"

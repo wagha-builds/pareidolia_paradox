@@ -125,6 +125,80 @@ def blend_predictions(
         raise ValueError(f"Unknown ensemble blending method: {method}")
 
 
+def slsqp_optimize_weights(
+    oof_arrays: list[np.ndarray],
+    y_true: np.ndarray,
+    n_restarts: int = 20,
+    seed: int = 0,
+) -> tuple[np.ndarray, float]:
+    """Find ensemble weights that directly maximize Balanced Accuracy on OOF predictions.
+
+    Uses SLSQP (Sequential Least Squares Quadratic Programming) via
+    ``scipy.optimize.minimize`` with a BA objective function evaluated at the
+    plateau threshold.  Weights are constrained to [0, 1] and must sum to 1.
+
+    Args:
+        oof_arrays:  list of N OOF probability arrays each of shape (7854,).
+        y_true:      ground-truth label array of shape (7854,), values in {0, 1}.
+        n_restarts:  number of random restarts (guards against local minima).
+        seed:        RNG seed for reproducible restarts.
+
+    Returns:
+        (best_weights, best_ba) — normalized weight array of shape (N,) and
+        the corresponding plateau-threshold BA on the blended OOF.
+    """
+    from scipy.optimize import minimize
+    from .metrics import apply_threshold, plateau_threshold
+
+    n = len(oof_arrays)
+    rng = np.random.default_rng(seed)
+
+    def neg_ba(w: np.ndarray) -> float:
+        """Negative BA (SLSQP minimizes)."""
+        w = np.clip(w, 0.0, 1.0)
+        w = w / (w.sum() + 1e-12)
+        blended = np.zeros(len(y_true), dtype=np.float64)
+        for arr, wi in zip(oof_arrays, w):
+            blended += wi * arr
+        blended = blended.astype(np.float32)
+        t, _, _ = plateau_threshold(y_true, blended)
+        y_pred = apply_threshold(blended, t)
+        from sklearn.metrics import balanced_accuracy_score
+        return -float(balanced_accuracy_score(y_true, y_pred))
+
+    constraints = {"type": "eq", "fun": lambda w: w.sum() - 1.0}
+    bounds = [(0.0, 1.0)] * n
+
+    best_w: np.ndarray | None = None
+    best_ba = -1.0
+
+    # Always include uniform start
+    starts = [np.ones(n) / n]
+    # Random restarts
+    for _ in range(n_restarts - 1):
+        x0 = rng.dirichlet(np.ones(n))
+        starts.append(x0)
+
+    for x0 in starts:
+        result = minimize(
+            neg_ba,
+            x0,
+            method="SLSQP",
+            bounds=bounds,
+            constraints=constraints,
+            options={"ftol": 1e-9, "maxiter": 1000},
+        )
+        w_opt = np.clip(result.x, 0.0, 1.0)
+        w_opt /= w_opt.sum()
+        ba_opt = -result.fun
+        if ba_opt > best_ba:
+            best_ba = ba_opt
+            best_w = w_opt
+
+    assert best_w is not None
+    return best_w, best_ba
+
+
 def evaluate_ensemble(
     y_true: np.ndarray,
     p_ens: np.ndarray,

@@ -119,14 +119,44 @@ def predict_run(
             for images, az_sincos, _, image_ids in loader:
                 x = images.to(device)
                 az = az_sincos.to(device)
-                p0 = predict_proba(model, x, az)
                 if tta:
-                    col_rev = torch.arange(x.shape[-1] - 1, -1, -1, device=x.device)
-                    xh = x[:, :, :, col_rev]
-                    ph = predict_proba(model, xh, az)
-                    p = 0.5 * (p0 + ph)
+                    # Legal azimuth-consistent jitter TTA:
+                    # Rotate image by ±delta degrees AND update az_sincos by the same
+                    # delta so FiLM conditioning stays physically consistent.
+                    # Uses affine_grid (no library augmentation policy).
+                    import torch.nn.functional as _F
+                    _INV_SQRT2 = 1.0 / (2.0 ** 0.5)
+                    jitter_deg = [-20.0, -10.0, 0.0, 10.0, 20.0]
+                    all_p = []
+                    for d_deg in jitter_deg:
+                        d_rad = torch.tensor(d_deg * 3.141592653589793 / 180.0,
+                                             dtype=x.dtype, device=x.device)
+                        cos_d = torch.cos(d_rad)
+                        sin_d = torch.sin(d_rad)
+                        B = x.shape[0]
+                        # Build affine matrix: rotate + sqrt(2) zoom (no border artifacts)
+                        theta = torch.zeros(B, 2, 3, device=x.device, dtype=x.dtype)
+                        theta[:, 0, 0] = _INV_SQRT2 * cos_d
+                        theta[:, 0, 1] = _INV_SQRT2 * sin_d
+                        theta[:, 1, 0] = -_INV_SQRT2 * sin_d
+                        theta[:, 1, 1] = _INV_SQRT2 * cos_d
+                        grid = _F.affine_grid(theta, x.size(), align_corners=False)
+                        x_jit = _F.grid_sample(x, grid, mode="bilinear",
+                                               padding_mode="reflection",
+                                               align_corners=False)
+                        # Rotate az_sincos vector by same delta:
+                        # (sin_az, cos_az) → (sin_az*cos_d + cos_az*sin_d,
+                        #                     cos_az*cos_d - sin_az*sin_d)
+                        sin_az = az[:, 0]
+                        cos_az = az[:, 1]
+                        az_jit = torch.stack([
+                            sin_az * cos_d + cos_az * sin_d,
+                            cos_az * cos_d - sin_az * sin_d,
+                        ], dim=1)
+                        all_p.append(predict_proba(model, x_jit, az_jit))
+                    p = torch.stack(all_p, dim=0).mean(dim=0)
                 else:
-                    p = p0
+                    p = predict_proba(model, x, az)
                 probs.append(p.cpu().numpy())
                 if ids is None:
                     ckpt_ids.extend(list(image_ids))
