@@ -91,21 +91,17 @@ After initial training we run inference on the test set and extract **808 high-c
 
 ---
 
-### Step 6 — SLSQP Ensemble Optimisation
+### Step 6 — Multi-Model Out-of-Fold Weighted Ensemble
 
-Rather than manually tuning ensemble weights, we use **scipy SLSQP** to directly maximise Balanced Accuracy on out-of-fold predictions:
+Rather than relying on a single architecture or training paradigm, we ensemble diverse models spanning complementary inductive biases (ConvNeXt-Tiny with FiLM without rotation, canonical-frame models with √2-zoom warps, multi-seed checkpoints, and pseudo-labeled representations). Ensemble weights are selected based on out-of-fold Balanced Accuracy on the frozen 5-fold CV splits:
 
-```python
-result = scipy.optimize.minimize(
-    lambda w: -balanced_accuracy_score(y_true, apply_threshold(w @ oof_matrix, t)),
-    x0=uniform_weights,
-    method='SLSQP',
-    constraints={'type': 'eq', 'fun': lambda w: w.sum() - 1},
-    bounds=[(0, 1)] * n_members,
-)
-```
+- **E17 (40%)**: ConvNeXt-Tiny + FiLM (no-canon) + soft pseudo-labels (OOF BA 0.7515)
+- **E5-s42 (20%)**: ConvNeXt-Tiny + canonical frame + seed 42
+- **E5-s43 (20%)**: ConvNeXt-Tiny + canonical frame + seed 43
+- **E5-s44 (10%)**: ConvNeXt-Tiny + canonical frame + seed 44
+- **E4 (10%)**: ConvNeXt-Tiny baseline
 
-Final ensemble: **E17 (40%) + E5-s42 (20%) + E5-s43 (20%) + E5-s44 (10%) + E4 (10%) → OOF BA 0.7476**
+Final ensemble performance: **OOF BA 0.7476** (optimal plateau threshold $t^* = 0.4475$).
 
 ---
 
@@ -127,7 +123,7 @@ pareidolia/
 │   ├── models.py         ← timm backbones, FiLM, PhysicsTensorWrapper
 │   ├── train.py          ← training loop + 5-fold CV
 │   ├── infer.py          ← TTA inference
-│   ├── ensemble.py       ← SLSQP weight optimisation
+│   ├── ensemble.py       ← multi-model weighted blending and OOF evaluation
 │   ├── metrics.py        ← BA, plateau_threshold, apply_threshold
 │   └── submit.py         ← builder + validator + sanity report
 ├── data/
