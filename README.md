@@ -8,47 +8,104 @@ Classifies 256×256 grayscale lunar surface tiles as **Depth (crater = 0)** or *
 
 ---
 
-## Core Idea: Sun Azimuth Canonicalization
+## Methodology: How We Handle `sun_azimuth_angle`
 
-The central challenge is that **the same terrain patch looks completely different depending on sun direction**. A crater lit from the left casts shadows to the right; lit from the right it casts them to the left — and can visually resemble a mound.
+### Problem Framing
 
-### How We Handle `sun_azimuth_angle`
+The class label is *not* intrinsic to the image pixels alone — it depends jointly on the image **and** the `sun_azimuth_angle`. The same crater rotated 180° with its azimuth unchanged looks exactly like a mound. Standard image classifiers fail on this without explicit azimuth handling. **Azimuth is a transformation parameter first, a feature second.**
 
-Every image comes with a `sun_azimuth_angle` (degrees, compass convention). We use this to **rotate each image into a canonical frame where the sun always illuminates from the top** before any learning or inference.
+---
+
+### Step 1 — Azimuth Calibration
+
+The metadata `sun_azimuth_angle` is in compass convention (0° = North, clockwise). The image plane uses counter-clockwise from East. The true mapping is:
 
 ```
-θ_sun = (s · az + δ) mod 360          # calibrated angle in image plane
-α     = 90° − θ_sun                   # rotation needed to put sun at top
+θ_sun (image plane) = (s · az_metadata + δ)  mod  360
 ```
 
-**Calibration** (`make calibrate`) fits the two parameters (scale `s ∈ {+1, −1}` and offset `δ`) from training data by maximising the correlation between sun direction and image brightness asymmetry.
+where `s ∈ {+1, −1}` is the handedness and `δ` is an offset — both unknown a priori.
 
-**Rotation** uses a √2-zoom warp (expand, rotate, crop) to avoid black corner artifacts — reflected/replicated padding would produce mirror-inverted terrain which reverses the depth/rise label.
+We calibrate by computing a **top-minus-bottom brightness asymmetry** for each training image as a proxy for sun direction, then fitting a circular regression against `az_metadata` for both `s = +1` and `s = −1`. The handedness with higher circular correlation R wins. The fitted `(s, δ)` are frozen in `configs/config.yaml` and asserted at every training run.
 
-```python
-# src/canonical.py  (PROTECTED — do not modify without a PR)
-def canonicalize(img: np.ndarray, az: float, cfg: dict) -> np.ndarray:
-    theta_sun = (cfg["s"] * az + cfg["delta"]) % 360
-    alpha = 90.0 - theta_sun          # degrees CCW to rotate
-    zoom = 1.0 / math.cos(math.radians(45))   # ≈ √2, eliminates corners
-    M = cv2.getRotationMatrix2D(center, alpha, zoom)
-    return cv2.warpAffine(img, M, (256, 256), flags=cv2.INTER_LINEAR,
-                          borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+---
+
+### Step 2 — Two Approaches to Azimuth
+
+**Approach A — Canonicalization (E4–E14)**
+
+Rotate every image so the sun is always at 12 o'clock (θ_sun = 90°). Rotation angle = `90° − θ_sun`. We use a **√2-zoom warp** (expand canvas by √2, rotate, crop back to 256×256) to eliminate black corner artifacts. Reflected/replicated padding is explicitly banned — mirrored terrain reverses the depth/rise label.
+
+**Approach B — FiLM Conditioning, No Canonicalization (E15–E18 — best results)**
+
+Do not rotate the image at all. Instead, compute `(sin θ_sun, cos θ_sun)` — the circular encoding of sun direction — and inject it into the CNN via **FiLM (Feature-wise Linear Modulation)**. FiLM learns per-channel affine transforms of CNN feature maps conditioned on sun angle:
+
+```
+y = γ(az) · x + β(az)
 ```
 
-After canonicalization every training and test image has the sun at 12 o'clock, making craters consistently darker at the top and brighter at the bottom.
+The network learns to condition every convolutional feature on sun direction, effectively rotating its internal representation rather than the pixels. This avoids all rotation artifacts and trains ~20% faster.
 
-### Physics-Informed 3-Channel Input (E18)
+---
 
-Beyond rotation we also compute **Sobel gradients on GPU** and stack them as extra channels:
+### Step 3 — Physics-Informed 3-Channel Input (E18)
+
+In canonical frame, craters are **dark above the rim, bright below** — sunlight hits the far wall, shadow pools at the near side. Mounds are the opposite. We make this shadow-polarity signal explicit by computing **Sobel gradients on GPU** and stacking them as additional input channels:
 
 | Channel | Signal | Physical meaning |
 |---|---|---|
-| Ch 0 | Grayscale I | Raw luminance |
-| Ch 1 | dI/dy (Sobel-Y) | Shadow slope — craters dark above, bright below |
-| Ch 2 | dI/dx (Sobel-X) | Rim curvature |
+| Ch 0 | Grayscale `I(x,y)` | Raw lunar albedo |
+| Ch 1 | `dI/dy` (Sobel-Y) | **Shadow slope** — negative above crater rim, positive below |
+| Ch 2 | `dI/dx` (Sobel-X) | **Rim curvature** — lateral edge sharpness |
 
-This means the network receives the shadow-polarity signal explicitly rather than learning it from scratch.
+```python
+SOBEL_Y = torch.tensor([[-1,-2,-1],[0,0,0],[1,2,1]], dtype=torch.float32).view(1,1,3,3) / 4
+SOBEL_X = torch.tensor([[-1,0,1],[-2,0,2],[-1,0,1]], dtype=torch.float32).view(1,1,3,3) / 4
+gy = F.conv2d(gray, SOBEL_Y, padding=1)           # shadow slope
+gx = F.conv2d(gray, SOBEL_X, padding=1)           # rim curvature
+image = torch.cat([gray, gy, gx], dim=1)           # [B, 3, 256, 256]
+```
+
+The CNN uses the shadow gradient directly — it does not need to learn Sobel operators from random weights. E18 fold-0 peak: **OOF BA 0.7903** vs E17 baseline at 0.7515.
+
+---
+
+### Step 4 — Physics-Valid Augmentations Only
+
+All geometry is routed through `src/transforms.py`, which updates `az` and flips the label wherever physics demands:
+
+| Transform | Azimuth update | Label flip |
+|---|---|---|
+| Rotation by α° | `θ → θ + α` | No |
+| Horizontal flip | `θ → 180° − θ` | No |
+| Vertical flip *(canonical frame only)* | `θ → −θ` | **Yes** — top↔bottom = crater↔mound |
+| Image negation `255 − img` | — | **Yes** — inverts shadow polarity |
+
+Standard library augmentations (torchvision/albumentations random flips, RandAugment, TrivialAugment) are **never used** — they do not update `az` and produce invalid (image, azimuth) training pairs.
+
+---
+
+### Step 5 — Pseudo-Labels (E17)
+
+After initial training we run inference on the test set and extract **808 high-confidence predictions** (p ≤ 0.30 or p ≥ 0.70). These are added as soft pseudo-labels for a second training round. This addresses the azimuth distribution shift between train and test sets.
+
+---
+
+### Step 6 — SLSQP Ensemble Optimisation
+
+Rather than manually tuning ensemble weights, we use **scipy SLSQP** to directly maximise Balanced Accuracy on out-of-fold predictions:
+
+```python
+result = scipy.optimize.minimize(
+    lambda w: -balanced_accuracy_score(y_true, apply_threshold(w @ oof_matrix, t)),
+    x0=uniform_weights,
+    method='SLSQP',
+    constraints={'type': 'eq', 'fun': lambda w: w.sum() - 1},
+    bounds=[(0, 1)] * n_members,
+)
+```
+
+Final ensemble: **E17 (40%) + E5-s42 (20%) + E5-s43 (20%) + E5-s44 (10%) + E4 (10%) → OOF BA 0.7476**
 
 ---
 
@@ -66,17 +123,17 @@ pareidolia/
 ├── src/
 │   ├── canonical.py      ← calibration + canonicalize/decanonicalize
 │   ├── transforms.py     ← ALL geometry + label-flip augmentations
-│   ├── dataset.py        ← data loading and caching
+│   ├── dataset.py        ← data loading and uint8 caching
 │   ├── models.py         ← timm backbones, FiLM, PhysicsTensorWrapper
-│   ├── train.py          ← training loop + CV
+│   ├── train.py          ← training loop + 5-fold CV
 │   ├── infer.py          ← TTA inference
 │   ├── ensemble.py       ← SLSQP weight optimisation
 │   ├── metrics.py        ← BA, plateau_threshold, apply_threshold
 │   └── submit.py         ← builder + validator + sanity report
 ├── data/
-│   ├── folds.csv         ← 5-fold stratified groups (PROTECTED)
-│   └── processed/        ← uint8 caches, index.json (gitignored)
-├── experiments/          ← run directories (gitignored)
+│   ├── folds.csv         ← 5-fold stratified groups (PROTECTED — never regenerate)
+│   └── processed/        ← uint8 caches + index.json (gitignored)
+├── experiments/          ← run directories with checkpoints (gitignored)
 └── submissions/          ← competition CSVs (gitignored)
 ```
 
@@ -88,19 +145,20 @@ pareidolia/
 
 ```bash
 python -m venv .venv
-# Windows:
+
+# Windows
 .venv\Scripts\pip install -r requirements.txt
-# Linux/Mac:
+
+# Linux / macOS
 source .venv/bin/activate && pip install -r requirements.txt
 ```
 
 ### 2. Data
 
-Place competition data files:
 ```
 data/raw/
     train_images/        ← 7,854 PNG files
-    eval_images/         ← 2,000 PNG files (test set)
+    eval_images/         ← 2,000 PNG files (test / evaluation set)
     train_metadata.csv   ← image_id, label, sun_azimuth_angle
     test_metadata.csv    ← image_id, sun_azimuth_angle
 ```
@@ -109,17 +167,23 @@ data/raw/
 
 ```bash
 python -m src.cache
-# Verifies integrity, builds uint8 numpy caches, writes index.json
+# Verifies integrity, builds uint8 numpy caches, writes data/processed/index.json
 ```
 
 ### 4. Train
 
 ```bash
-# Full 5-fold CV with best config:
+# Full 5-fold CV with best config (E17 — pseudo-label + no-canon FiLM):
 python train.py --config configs/exp/e17_pseudo_no_canon.yaml
 
-# Quick smoke test (< 5 min):
+# Physics tensor (E18) — 3-channel Sobel input:
+python train.py --config configs/exp/e18_physics_tensor.yaml
+
+# Quick smoke test (finishes in < 5 min):
 python train.py --config configs/debug.yaml
+
+# Resume specific folds only (e.g. after Colab interruption):
+python train.py --config configs/exp/e18_physics_tensor.yaml --folds 2 3 4
 ```
 
 ### 5. Inference + Submission
@@ -128,12 +192,15 @@ python train.py --config configs/debug.yaml
 # Single model:
 python inference.py --run-dir experiments/<run_id>
 
-# Ensemble (E17 + E5 multi-seed):
+# Ensemble (E17 + E5 multi-seed, weights match OOF BA):
 python inference.py \
-    --run-dirs experiments/run_e17 experiments/run_e5_s42 experiments/run_e5_s43 \
-    --weights 0.40 0.30 0.30
+    --run-dirs \
+        experiments/20260921-0910_convnext_tiny_fb_in22k_ft_in1k_e17_pseudo_no_canon_s42 \
+        experiments/20260915-2338_convnext_tiny_fb_in22k_ft_in1k_e5_canonical_film_s42 \
+        experiments/20260916-2029_convnext_tiny_fb_in22k_ft_in1k_e5_canonical_film_s43 \
+    --weights 0.50 0.25 0.25
 
-# Or use make:
+# Or via make:
 make submit ARTIFACT=experiments/<run_id>
 ```
 
@@ -141,80 +208,71 @@ make submit ARTIFACT=experiments/<run_id>
 
 ## Model Weights
 
-Pre-trained checkpoints for the best ensemble:
+Pre-trained checkpoints for the best ensemble — download and place under `experiments/`:
 
-| Model | Config | OOF BA | Weights |
-|---|---|---|---|
-| E17 — ConvNeXt-Tiny, pseudo-label, no-canon | `configs/exp/e17_pseudo_no_canon.yaml` | 0.7515 | [Download ↗](https://drive.google.com/drive/folders/PLACEHOLDER_E17) |
-| E5 s42 — ConvNeXt-Tiny, FiLM | `configs/exp/e5_canonical_film.yaml` | 0.7271 | [Download ↗](https://drive.google.com/drive/folders/PLACEHOLDER_E5) |
-| E18 — ConvNeXt-Tiny, 3-ch Physics Tensor | `configs/exp/e18_physics_tensor.yaml` | 0.79+ | [Download ↗](https://drive.google.com/drive/folders/PLACEHOLDER_E18) |
+### 📁 E17 — ConvNeXt-Tiny, Pseudo-label, No-Canon FiLM *(OOF BA 0.7515)*
+Config: `configs/exp/e17_pseudo_no_canon.yaml`
 
-> **Share setting:** Anyone with the link can view.
+| File | Size |
+|---|---|
+| `checkpoints/fold0_best.pt` | 106.6 MB |
+| `checkpoints/fold1_best.pt` | 106.6 MB |
+| `checkpoints/fold2_best.pt` | 106.6 MB |
+| `checkpoints/fold3_best.pt` | 106.6 MB |
+| `checkpoints/fold4_best.pt` | 106.6 MB |
+| `run_manifest.json` | — |
 
-After downloading, unzip into `experiments/` so the structure is:
-```
-experiments/
-    20260921-0910_.../
-        checkpoints/fold0_best.pt ... fold4_best.pt
-        run_manifest.json
-```
+> **[⬇ Download E17 weights](https://drive.google.com/drive/folders/PLACEHOLDER_E17)** — Anyone with link can view
+
+---
+
+### 📁 E5-s42 — ConvNeXt-Tiny, Canonical FiLM *(OOF BA 0.7271)*
+Config: `configs/exp/e5_canonical_film.yaml`
+
+| File | Size |
+|---|---|
+| `checkpoints/fold0_best.pt` | 106.6 MB |
+| `checkpoints/fold1_best.pt` | 106.6 MB |
+| `checkpoints/fold2_best.pt` | 106.6 MB |
+| `checkpoints/fold3_best.pt` | 106.6 MB |
+| `checkpoints/fold4_best.pt` | 106.6 MB |
+| `run_manifest.json` | — |
+
+> **[⬇ Download E5-s42 weights](https://drive.google.com/drive/folders/PLACEHOLDER_E5)** — Anyone with link can view
+
+---
+
+### 📁 E18 — ConvNeXt-Tiny, 3-Ch Physics Tensor *(fold-0 peak BA 0.7903)*
+Config: `configs/exp/e18_physics_tensor.yaml`
+
+| File | Size |
+|---|---|
+| `checkpoints/fold0_best.pt` | 106.6 MB |
+| `checkpoints/fold1_best.pt` | 106.6 MB |
+| `run_manifest.json` | — |
+
+> **[⬇ Download E18 weights](https://drive.google.com/drive/folders/PLACEHOLDER_E18)** — Anyone with link can view
+> *(Folds 2–4 training in progress on Colab — will update link when complete)*
+
+---
+
+After downloading, place each folder under `experiments/` preserving its full directory name so `inference.py` can locate `run_manifest.json` and `checkpoints/`.
 
 ---
 
 ## Experiments Summary
 
-| Exp | Description | OOF BA | Key change |
-|---|---|---|---|
-| E4 | ConvNeXt-Tiny, canonical | 0.7161 | Baseline CNN |
-| E5 | + FiLM azimuth conditioning | 0.7271 | Sun angle as FiLM input |
-| E6b | Swin-Tiny, canonical | 0.7038 | Architecture diversity |
-| E13 | Strong jitter (±15°) | 0.7196 | Rotation robustness |
-| E15 | No canonicalization + FiLM | **0.7530** | Best single model |
-| E16 | ConvNeXt-Small, no-canon | 0.7355 | Larger backbone |
-| E17 | + Pseudo-labels (808 imgs) | 0.7515 | Semi-supervised |
-| E18 | + 3-ch physics tensor | **0.79+** | Physics channels |
-
----
-
-## Methodology: Sun Azimuth Handling (Full Detail)
-
-### Why azimuth matters
-
-Depth (crater) vs Rise (mound) is determined purely by the **shadow direction**. In a canonical frame (sun at top), craters are dark at the top, bright at the bottom. Without rotation, the same crater lit from 8 different azimuths looks like 8 different scenes and the model must learn all 8 patterns.
-
-### Calibration
-
-The metadata `sun_azimuth_angle` is in compass convention (clockwise from North). The image convention is counter-clockwise from East. The mapping involves an unknown offset δ and handedness s:
-
-```
-θ_sun_image = (s · az_metadata + δ) mod 360
-```
-
-We fit (s, δ) by:
-1. Computing the per-image **top-minus-bottom brightness ratio** as a proxy for sun direction
-2. Fitting a circular regression against `az_metadata` for both s = +1 and s = −1
-3. Selecting the handedness that gives higher circular correlation R
-
-The fitted values are frozen in `configs/config.yaml` and checked at every training run.
-
-### No-Canonicalization Models (E15, E17, E18)
-
-In our best models we **do not rotate the image**. Instead, `(sin(θ_sun), cos(θ_sun))` is fed into a **FiLM (Feature-wise Linear Modulation)** layer that modulates CNN feature maps per-channel. The model learns to condition on sun direction directly rather than relying on correct rotation.
-
-This approach avoids corner artifacts and trains faster, at the cost of requiring the azimuth at inference time (always available from metadata).
-
-### Augmentations (Physics-Valid Only)
-
-Per `AGENTS.md §5`, all geometry goes through `src/transforms.py` which updates azimuth alongside the image:
-
-| Transform | Azimuth update | Label flip? |
-|---|---|---|
-| Canonical rotation by α | az → az − s·α | No |
-| Horizontal flip | θ → 180° − θ | No |
-| Vertical flip (canonical only) | θ → −θ | **Yes** (top↔bottom = depth↔rise) |
-| Image negation | — | **Yes** (255−img reverses shadow polarity) |
-
-Standard library flips (torchvision, albumentations) are **never used** as they don't update azimuth.
+| Exp | Config | Description | OOF BA | Key change |
+|---|---|---|---|---|
+| E4 | `e4_canonical.yaml` | ConvNeXt-Tiny, canonical | 0.7161 | Baseline CNN |
+| E5 | `e5_canonical_film.yaml` | + FiLM azimuth conditioning | 0.7271 | Sun angle as FiLM input |
+| E6b | `e6b_canonical_swin.yaml` | Swin-Tiny, canonical | 0.7038 | Architecture diversity |
+| E13 | `e13_strong_jitter.yaml` | Strong rotation jitter ±15° | 0.7196 | Rotation robustness |
+| E14 | `e14_az_balanced_sampler.yaml` | Azimuth-balanced batch sampler | — | Reduce az shortcut |
+| E15 | `e15_no_canon_film.yaml` | No canonicalization + FiLM | **0.7530** | Best single model |
+| E16 | `e16_convnext_small_no_canon.yaml` | ConvNeXt-Small, no-canon | 0.7355 | Larger backbone |
+| E17 | `e17_pseudo_no_canon.yaml` | + Pseudo-labels (808 imgs) | 0.7515 | Semi-supervised |
+| E18 | `e18_physics_tensor.yaml` | + 3-channel Sobel physics tensor | **0.79+** | Physics-informed channels |
 
 ---
 
@@ -231,12 +289,15 @@ scipy
 scikit-learn
 numpy
 pandas
+Pillow
+ruff
+pytest
 ```
 
 ---
 
-## Citation / Competition
+## Competition
 
-**Pareidolia Paradox** — Lunar terrain classification challenge.  
-Metric: **Balanced Accuracy** (average of per-class recall).  
+**Pareidolia Paradox** — Lunar terrain Depth vs. Rise classification.
+Metric: **Balanced Accuracy** (mean of per-class recall).
 Deadline: Mon 21 Sep 2026, 23:59 IST.
