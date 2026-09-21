@@ -36,7 +36,7 @@ We calibrate by computing a **top-minus-bottom brightness asymmetry** for each t
 
 Rotate every image so the sun is always at 12 o'clock (θ_sun = 90°). Rotation angle = `90° − θ_sun`. We use a **√2-zoom warp** (expand canvas by √2, rotate, crop back to 256×256) to eliminate black corner artifacts. Reflected/replicated padding is explicitly banned — mirrored terrain reverses the depth/rise label.
 
-**Approach B — FiLM Conditioning, No Canonicalization (E15–E18 — best results)**
+**Approach B — FiLM Conditioning, No Canonicalization (E15, E17 — best results)**
 
 Do not rotate the image at all. Instead, compute `(sin θ_sun, cos θ_sun)` — the circular encoding of sun direction — and inject it into the CNN via **FiLM (Feature-wise Linear Modulation)**. FiLM learns per-channel affine transforms of CNN feature maps conditioned on sun angle:
 
@@ -48,29 +48,7 @@ The network learns to condition every convolutional feature on sun direction, ef
 
 ---
 
-### Step 3 — Physics-Informed 3-Channel Input (E18)
-
-In canonical frame, craters are **dark above the rim, bright below** — sunlight hits the far wall, shadow pools at the near side. Mounds are the opposite. We make this shadow-polarity signal explicit by computing **Sobel gradients on GPU** and stacking them as additional input channels:
-
-| Channel | Signal | Physical meaning |
-|---|---|---|
-| Ch 0 | Grayscale `I(x,y)` | Raw lunar albedo |
-| Ch 1 | `dI/dy` (Sobel-Y) | **Shadow slope** — negative above crater rim, positive below |
-| Ch 2 | `dI/dx` (Sobel-X) | **Rim curvature** — lateral edge sharpness |
-
-```python
-SOBEL_Y = torch.tensor([[-1,-2,-1],[0,0,0],[1,2,1]], dtype=torch.float32).view(1,1,3,3) / 4
-SOBEL_X = torch.tensor([[-1,0,1],[-2,0,2],[-1,0,1]], dtype=torch.float32).view(1,1,3,3) / 4
-gy = F.conv2d(gray, SOBEL_Y, padding=1)           # shadow slope
-gx = F.conv2d(gray, SOBEL_X, padding=1)           # rim curvature
-image = torch.cat([gray, gy, gx], dim=1)           # [B, 3, 256, 256]
-```
-
-The CNN uses the shadow gradient directly — it does not need to learn Sobel operators from random weights. E18 fold-0 peak: **OOF BA 0.7903** vs E17 baseline at 0.7515.
-
----
-
-### Step 4 — Physics-Valid Augmentations Only
+### Step 3 — Physics-Valid Augmentations Only
 
 All geometry is routed through `src/transforms.py`, which updates `az` and flips the label wherever physics demands:
 
@@ -85,13 +63,13 @@ Standard library augmentations (torchvision/albumentations random flips, RandAug
 
 ---
 
-### Step 5 — Pseudo-Labels (E17)
+### Step 4 — Pseudo-Labels (E17)
 
 After initial training we run inference on the test set and extract **808 high-confidence predictions** (p ≤ 0.30 or p ≥ 0.70). These are added as soft pseudo-labels for a second training round. This addresses the azimuth distribution shift between train and test sets.
 
 ---
 
-### Step 6 — Multi-Model Out-of-Fold Weighted Ensemble
+### Step 5 — Multi-Model Out-of-Fold Weighted Ensemble
 
 Rather than relying on a single architecture or training paradigm, we ensemble diverse models spanning complementary inductive biases (ConvNeXt-Tiny with FiLM without rotation, canonical-frame models with √2-zoom warps, multi-seed checkpoints, and pseudo-labeled representations). Ensemble weights are selected based on out-of-fold Balanced Accuracy on the frozen 5-fold CV splits:
 
@@ -238,17 +216,11 @@ Config: `configs/exp/e5_canonical_film.yaml`
 
 ---
 
-### 📁 E18 — ConvNeXt-Tiny, 3-Ch Physics Tensor *(fold-0 peak BA 0.7903)*
-Config: `configs/exp/e18_physics_tensor.yaml`
-
-| File | Size |
-|---|---|
-| `checkpoints/fold0_best.pt` | 106.6 MB |
-| `checkpoints/fold1_best.pt` | 106.6 MB |
-| `run_manifest.json` | — |
-
-> **[⬇ Download E18 weights](https://drive.google.com/drive/folders/PLACEHOLDER_E18)** — Anyone with link can view
-> *(Folds 2–4 training in progress on Colab — will update link when complete)*
+### 📁 E5 (Seeds 43 & 44) & E4 Checkpoints
+Checkpoints for E5 (seeds 43, 44) and E4 are also provided in the weights bundle for reproducing the full 5-model ensemble:
+- `E5_canonical_film_s43` (5 folds, 106.6 MB each)
+- `E5_canonical_film_s44` (5 folds, 106.6 MB each)
+- `E4_baseline_s42` (5 folds, 106.6 MB each)
 
 ---
 
@@ -268,7 +240,7 @@ After downloading, place each folder under `experiments/` preserving its full di
 | E15 | `e15_no_canon_film.yaml` | No canonicalization + FiLM | **0.7530** | Best single model |
 | E16 | `e16_convnext_small_no_canon.yaml` | ConvNeXt-Small, no-canon | 0.7355 | Larger backbone |
 | E17 | `e17_pseudo_no_canon.yaml` | + Pseudo-labels (808 imgs) | 0.7515 | Semi-supervised |
-| E18 | `e18_physics_tensor.yaml` | + 3-channel Sobel physics tensor | **0.79+** | Physics-informed channels |
+| E18 | `e18_physics_tensor.yaml` | + 3-channel Sobel physics tensor | — (exploratory) | Investigated 3-ch input; not in final ensemble |
 
 ---
 
