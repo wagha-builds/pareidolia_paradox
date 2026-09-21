@@ -218,9 +218,11 @@ Config: `configs/exp/e5_canonical_film.yaml`
 
 ### 📁 E5 (Seeds 43 & 44) & E4 Checkpoints
 Checkpoints for E5 (seeds 43, 44) and E4 are also provided in the weights bundle for reproducing the full 5-model ensemble:
-- `E5_canonical_film_s43` (5 folds, 106.6 MB each)
-- `E5_canonical_film_s44` (5 folds, 106.6 MB each)
-- `E4_baseline_s42` (5 folds, 106.6 MB each)
+- `experiments/20260916-2029_convnext_tiny_fb_in22k_ft_in1k_e5_canonical_film_s43/` (5 folds: `fold0_best.pt` through `fold4_best.pt`)
+- `experiments/20260918-2106_convnext_tiny_fb_in22k_ft_in1k_e5_canonical_film_s44/` (5 folds: `fold0_best.pt` through `fold4_best.pt`)
+- `experiments/20260913-1701_convnext_tiny_fb_in22k_ft_in1k_e4_canonical_s42/` (5 folds: `fold0_best.pt` through `fold4_best.pt`)
+
+*(Note: `20260913-1641` was an initial 1-fold smoke test; the complete 5-fold cross-validation run is in `20260913-1701`.)*
 
 ---
 
