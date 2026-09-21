@@ -161,7 +161,8 @@ def _train_one_fold(
     model = build_model(cfg_dict).to(device)
     if device.type == "cuda":
         model = model.to(memory_format=torch.channels_last)
-    criterion = build_loss(labels[train_idx], float(cfg.training.label_smoothing)).to(
+    loss_type = str(cfg.training.get("loss_type", "ce"))
+    criterion = build_loss(labels[train_idx], float(cfg.training.label_smoothing), loss_type=loss_type).to(
         device
     )
     optimizer = torch.optim.AdamW(

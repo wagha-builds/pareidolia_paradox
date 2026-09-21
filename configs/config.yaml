@@ -24,6 +24,7 @@ model:
   drop_path_rate: 0.1
 training:
   epochs: 30
+  loss_type: ce
   batch_size: 32
   learning_rate: 5e-5
   weight_decay: 0.05
